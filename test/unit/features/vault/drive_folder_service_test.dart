@@ -10,8 +10,16 @@ void main() {
         ..queueResponse(
           drive.FileList(
             files: <drive.File>[
-              drive.File(id: 'folder-a', name: 'Archive'),
-              drive.File(id: 'folder-b', name: 'Work'),
+              drive.File(
+                id: 'folder-a',
+                name: 'Archive',
+                mimeType: DriveFolderService.folderMimeType,
+              ),
+              drive.File(
+                id: 'folder-b',
+                name: 'Work',
+                mimeType: DriveFolderService.folderMimeType,
+              ),
             ],
           ),
         );
@@ -63,10 +71,10 @@ void main() {
 
         final notes = await service.scanVault(vaultId: 7, rootFolderId: 'root');
 
-        expect(notes.map((note) => note.title), <String>['Root', 'Nested']);
+        expect(notes.map((note) => note.title), <String>['Nested', 'Root']);
         expect(notes.map((note) => note.filePath), <String>[
-          'Root.md',
           'Notes/Nested.md',
+          'Root.md',
         ]);
         expect(notes.every((note) => note.vaultId == 7), isTrue);
       },
