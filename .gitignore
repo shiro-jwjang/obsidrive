@@ -1,0 +1,34 @@
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+*.lock
+!pubspec.lock
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated
+*.g.dart
+*.freezed.dart
+*.mocks.dart
+
+# Firebase (never commit)
+google-services.json
+GoogleService-Info.plist
+firebase_options.dart
+
+# Obsidian (if vault is cloned)
+.obsidian/
+
+# Coverage
+coverage/
