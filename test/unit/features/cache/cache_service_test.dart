@@ -115,7 +115,10 @@ void main() {
     await createService().checkForUpdates(<Note>[unchanged, modified]);
 
     expect(driveClient.downloadedFileIds, <String>['changed']);
-    expect(await File(changedPath).readAsString(), '# New');
+    expect(
+      await File(store.files['changed']!.localPath).readAsString(),
+      '# New',
+    );
     expect(await File(samePath).readAsString(), '# Same');
   });
 }
