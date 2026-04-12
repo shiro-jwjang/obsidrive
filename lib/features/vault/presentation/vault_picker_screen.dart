@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../cache/domain/cache_provider.dart';
 import '../domain/vault_models.dart';
 import '../domain/vault_provider.dart';
 
@@ -128,7 +129,12 @@ class _VaultPickerScreenState extends ConsumerState<VaultPickerScreen> {
   }
 
   Future<void> _selectVault(DriveFolder folder) async {
-    await ref.read(vaultScannerProvider).scanAndSyncVault(folder);
+    final vault = await ref.read(vaultScannerProvider).scanAndSyncVault(folder);
+    final vaultId = vault.id;
+    if (vaultId != null && ref.read(isOnlineProvider)) {
+      final notes = await ref.read(vaultRepositoryProvider).listNotes(vaultId);
+      await ref.read(cacheSyncControllerProvider).syncVault(notes);
+    }
     if (mounted) {
       ScaffoldMessenger.of(
         context,

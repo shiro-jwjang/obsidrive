@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:googleapis/drive/v3.dart' as drive;
 
+import '../../cache/data/cache_service.dart';
 import '../../vault/data/vault_repository.dart';
 import '../../vault/domain/vault_models.dart';
 
@@ -59,19 +60,34 @@ class NoteContentRepository {
   NoteContentRepository({
     required NoteContentStore store,
     required DriveFileContentClient driveClient,
+    CacheService? cacheService,
+    bool Function()? isOnline,
     DateTime Function()? now,
     this.staleAfter = const Duration(minutes: 15),
   }) : _store = store,
        _driveClient = driveClient,
+       _cacheService = cacheService,
+       _isOnline = isOnline ?? (() => true),
        _now = now ?? DateTime.now;
 
   final NoteContentStore _store;
   final DriveFileContentClient _driveClient;
+  final CacheService? _cacheService;
+  final bool Function() _isOnline;
   final DateTime Function() _now;
   final Duration staleAfter;
 
   Future<String> getContent(Note note) async {
     final cached = await _latestNote(note);
+    if (!_isOnline()) {
+      final offlineContent = await _cacheService?.getCachedNote(cached);
+      if (offlineContent != null) {
+        return offlineContent;
+      }
+
+      throw const OfflineNoteUnavailableException();
+    }
+
     if (_hasFreshCache(cached)) {
       return cached.content!;
     }
@@ -149,5 +165,14 @@ class NoteContentRepository {
     final separator = trimmed.lastIndexOf('/');
     final title = separator == -1 ? trimmed : trimmed.substring(separator + 1);
     return title.toLowerCase();
+  }
+}
+
+class OfflineNoteUnavailableException implements Exception {
+  const OfflineNoteUnavailableException();
+
+  @override
+  String toString() {
+    return '오프라인 — 싱크 후 사용 가능';
   }
 }

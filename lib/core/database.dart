@@ -5,7 +5,7 @@ class AppDatabase {
   AppDatabase({Database? database}) : _database = database;
 
   static const databaseName = 'obsidrive.db';
-  static const databaseVersion = 1;
+  static const databaseVersion = 2;
 
   Database? _database;
 
@@ -21,6 +21,7 @@ class AppDatabase {
       path,
       version: databaseVersion,
       onCreate: (db, version) => _ensureSchema(db),
+      onUpgrade: (db, oldVersion, newVersion) => _ensureSchema(db),
       onOpen: _ensureSchema,
     );
     _database = opened;
@@ -71,11 +72,23 @@ class AppDatabase {
       )
     ''');
 
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS cache_files (
+        file_id TEXT PRIMARY KEY,
+        local_path TEXT NOT NULL,
+        cached_at TEXT NOT NULL,
+        file_size INTEGER NOT NULL
+      )
+    ''');
+
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_notes_vault_path ON notes(vault_id, file_path)',
     );
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_wikilink_source ON wikilink_index(source_note_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_cache_files_cached_at ON cache_files(cached_at)',
     );
   }
 }

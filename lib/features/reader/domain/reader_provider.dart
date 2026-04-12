@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../../../core/markdown_parser.dart';
 import '../../auth/domain/auth_state.dart';
+import '../../cache/domain/cache_provider.dart';
 import '../../vault/domain/vault_models.dart';
 import '../../vault/domain/vault_provider.dart';
 import '../data/note_content_repository.dart';
@@ -33,6 +34,8 @@ final noteContentRepositoryProvider = Provider<NoteContentRepository>((ref) {
   return NoteContentRepository(
     store: ref.watch(noteContentStoreProvider),
     driveClient: ref.watch(driveFileContentClientProvider),
+    cacheService: ref.watch(cacheServiceProvider),
+    isOnline: () => ref.read(isOnlineProvider),
   );
 });
 
