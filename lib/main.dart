@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'features/auth/domain/auth_state.dart';
 import 'features/auth/presentation/login_screen.dart';
+import 'features/reader/presentation/reader_screen.dart';
 import 'features/vault/domain/vault_provider.dart';
 import 'features/vault/presentation/folder_tree_widget.dart';
 import 'features/vault/presentation/vault_picker_screen.dart';
@@ -23,7 +24,7 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
       routes: <String, WidgetBuilder>{
-        '/reader': (context) => const _ReaderPlaceholderScreen(),
+        '/reader': (context) => const ReaderScreen(),
       },
       home: const _AppRoot(),
     );
@@ -73,14 +74,5 @@ class _AppRoot extends ConsumerWidget {
         ),
       ),
     );
-  }
-}
-
-class _ReaderPlaceholderScreen extends StatelessWidget {
-  const _ReaderPlaceholderScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(body: Center(child: Text('리더 준비 중')));
   }
 }
