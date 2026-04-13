@@ -39,11 +39,11 @@ final selectedVaultProvider = FutureProvider<Vault?>((ref) {
 
 final selectedVaultNotesProvider = FutureProvider<List<Note>>((ref) async {
   final vault = await ref.watch(selectedVaultProvider.future);
-  if (vault?.id == null) {
+  if (vault == null) {
     return const <Note>[];
   }
 
-  return ref.watch(vaultRepositoryProvider).listNotes(vault!.id!);
+  return ref.watch(vaultRepositoryProvider).listNotes(vault.id);
 });
 
 final scanProgressProvider = StateProvider<ScanProgress>((ref) {
@@ -85,11 +85,16 @@ class VaultScanner {
     _onProgress(const ScanProgress(status: ScanStatus.syncing));
 
     try {
+      // Insert vault first to get an id
       var vault = await _repository.upsertVault(
-        Vault(name: folder.name, driveFolderId: folder.id),
+        Vault(
+          id: -1, // placeholder, will be assigned by DB
+          name: folder.name,
+          driveFolderId: folder.id,
+        ),
       );
       final notes = await _driveFolderService.scanVault(
-        vaultId: vault.id!,
+        vaultId: vault.id,
         rootFolderId: folder.id,
       );
       _onProgress(
@@ -100,11 +105,11 @@ class VaultScanner {
         ),
       );
 
-      await _repository.bulkInsertNotes(vault.id!, notes);
+      await _repository.bulkInsertNotes(vault.id, notes);
       vault = await _repository.upsertVault(
-        vault.copyWith(lastSyncedAt: DateTime.now()),
+        vault.copyWithDateTime(lastSyncedAt: DateTime.now()),
       );
-      await _repository.setSelectedVaultId(vault.id!);
+      await _repository.setSelectedVaultId(vault.id);
 
       _onProgress(
         ScanProgress(

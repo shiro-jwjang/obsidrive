@@ -39,7 +39,7 @@ void main() {
     });
 
     test(
-      'scanVault returns Note list recursively for .md files only',
+      'scanVault returns NotesCompanion list recursively for .md files only',
       () async {
         final client = FakeDriveFilesClient()
           ..queueResponse(
@@ -71,12 +71,12 @@ void main() {
 
         final notes = await service.scanVault(vaultId: 7, rootFolderId: 'root');
 
-        expect(notes.map((note) => note.title), <String>['Nested', 'Root']);
-        expect(notes.map((note) => note.filePath), <String>[
+        expect(notes.map((n) => n.title.value), <String>['Nested', 'Root']);
+        expect(notes.map((n) => n.filePath.value), <String>[
           'Notes/Nested.md',
           'Root.md',
         ]);
-        expect(notes.every((note) => note.vaultId == 7), isTrue);
+        expect(notes.every((n) => n.vaultId.value == 7), isTrue);
       },
     );
 
@@ -120,7 +120,7 @@ void main() {
 
       final notes = await service.scanVault(vaultId: 1, rootFolderId: 'root');
 
-      expect(notes.map((note) => note.filePath), <String>['Notes/Visible.md']);
+      expect(notes.map((n) => n.filePath.value), <String>['Notes/Visible.md']);
       expect(client.requests, hasLength(2));
       expect(client.requests.last.q, contains("'notes' in parents"));
     });

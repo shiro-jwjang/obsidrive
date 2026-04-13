@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:obsidrive/features/vault/domain/vault_models.dart';
 import 'package:obsidrive/features/vault/presentation/folder_tree_widget.dart';
 
@@ -49,16 +50,24 @@ void main() {
 }
 
 Widget treeApp(List<Note> notes, {List<Note>? opened}) {
-  return MaterialApp(
-    routes: <String, WidgetBuilder>{
-      '/reader': (context) {
-        final note = ModalRoute.of(context)!.settings.arguments! as Note;
-        opened?.add(note);
-        return Scaffold(body: Text('Reader: ${note.title}'));
-      },
-    },
-    home: Scaffold(body: FolderTreeWidget(notes: notes)),
+  final router = GoRouter(
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (context, state) =>
+            Scaffold(body: FolderTreeWidget(notes: notes)),
+      ),
+      GoRoute(
+        path: '/reader',
+        builder: (context, state) {
+          final note = state.extra! as Note;
+          opened?.add(note);
+          return Scaffold(body: Text('Reader: ${note.title}'));
+        },
+      ),
+    ],
   );
+  return MaterialApp.router(routerConfig: router);
 }
 
 List<Note> sampleNotes() {
@@ -80,6 +89,6 @@ Note note({
     title: title,
     filePath: path,
     driveFileId: driveFileId ?? 'drive-$id',
-    updatedAt: DateTime.utc(2026, 4, 13),
+    updatedAt: DateTime.utc(2026, 4, 13).toIso8601String(),
   );
 }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:googleapis/drive/v3.dart' as drive;
 
 import '../../cache/data/cache_service.dart';
@@ -94,7 +95,10 @@ class NoteContentRepository {
 
     final content = await _driveClient.downloadMarkdown(cached.driveFileId);
     await _store.upsertNote(
-      cached.copyWith(content: content, cachedAt: _now()),
+      cached.copyWith(
+        content: Value(content),
+        cachedAt: Value(_now().toIso8601String()),
+      ),
     );
     return content;
   }
@@ -120,24 +124,27 @@ class NoteContentRepository {
   }
 
   Future<Note> _latestNote(Note note) async {
-    final id = note.id;
-    if (id == null) {
-      return note;
-    }
-
-    return await _store.getNote(id) ?? note;
+    return await _store.getNote(note.id) ?? note;
   }
 
   bool _hasFreshCache(Note note) {
     final content = note.content;
-    final cachedAt = note.cachedAt;
-    if (content == null || cachedAt == null) {
+    final cachedAtStr = note.cachedAt;
+    if (content == null || cachedAtStr == null) {
       return false;
     }
 
-    final updatedAt = note.updatedAt;
-    if (updatedAt != null && updatedAt.isAfter(cachedAt)) {
+    final cachedAt = DateTime.tryParse(cachedAtStr);
+    if (cachedAt == null) {
       return false;
+    }
+
+    final updatedAtStr = note.updatedAt;
+    if (updatedAtStr != null) {
+      final updatedAt = DateTime.tryParse(updatedAtStr);
+      if (updatedAt != null && updatedAt.isAfter(cachedAt)) {
+        return false;
+      }
     }
 
     return _now().difference(cachedAt) <= staleAfter;

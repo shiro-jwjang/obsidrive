@@ -6,10 +6,8 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository();
 });
 
-final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
-  (ref) {
-    return AuthController(ref.watch(authRepositoryProvider));
-  },
+final authControllerProvider = NotifierProvider<AuthController, AuthState>(
+  AuthController.new,
 );
 
 enum AuthStatus { initial, authenticated, unauthenticated, error }
@@ -66,10 +64,11 @@ class AuthState {
   }
 }
 
-class AuthController extends StateNotifier<AuthState> {
-  AuthController(this._repository) : super(const AuthState.initial());
+class AuthController extends Notifier<AuthState> {
+  @override
+  AuthState build() => const AuthState.initial();
 
-  final AuthRepository _repository;
+  AuthRepository get _repository => ref.read(authRepositoryProvider);
 
   Future<void> restoreSession() async {
     state = state.copyWith(isLoading: true, clearError: true);

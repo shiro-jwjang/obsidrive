@@ -1,3 +1,8 @@
+import 'package:drift/drift.dart' show Value;
+
+import '../../../core/database.dart' show Vault, Note;
+export '../../../core/database.dart' show Vault, Note;
+
 class DriveFolder {
   const DriveFolder({required this.id, required this.name});
 
@@ -13,148 +18,38 @@ class DriveFolder {
   int get hashCode => Object.hash(id, name);
 }
 
-class Vault {
-  const Vault({
-    this.id,
-    required this.name,
-    required this.driveFolderId,
-    this.lastSyncedAt,
-  });
+/// Extension helpers on drift-generated [Vault].
+extension VaultX on Vault {
+  DateTime? get lastSyncedAtDateTime =>
+      lastSyncedAt == null ? null : DateTime.tryParse(lastSyncedAt!);
 
-  final int? id;
-  final String name;
-  final String driveFolderId;
-  final DateTime? lastSyncedAt;
-
-  Vault copyWith({
-    int? id,
-    String? name,
-    String? driveFolderId,
-    DateTime? lastSyncedAt,
-  }) {
-    return Vault(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      driveFolderId: driveFolderId ?? this.driveFolderId,
-      lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
-    );
-  }
-
-  Map<String, Object?> toMap() {
-    return <String, Object?>{
-      'id': id,
-      'name': name,
-      'drive_folder_id': driveFolderId,
-      'last_synced_at': lastSyncedAt?.toIso8601String(),
-    };
-  }
-
-  static Vault fromMap(Map<String, Object?> map) {
-    return Vault(
-      id: map['id'] as int?,
-      name: map['name'] as String,
-      driveFolderId: map['drive_folder_id'] as String,
-      lastSyncedAt: _dateTimeFromMap(map['last_synced_at']),
+  Vault copyWithDateTime({DateTime? lastSyncedAt}) {
+    return copyWith(
+      lastSyncedAt: lastSyncedAt == null
+          ? const Value.absent()
+          : Value(lastSyncedAt.toIso8601String()),
     );
   }
 }
 
-class Note {
-  const Note({
-    this.id,
-    required this.vaultId,
-    required this.title,
-    required this.filePath,
-    required this.driveFileId,
-    this.content,
-    this.cachedAt,
-    this.updatedAt,
-  });
+/// Extension helpers on drift-generated [Note].
+extension NoteX on Note {
+  DateTime? get cachedAtDateTime =>
+      cachedAt == null ? null : DateTime.tryParse(cachedAt!);
 
-  final int? id;
-  final int vaultId;
-  final String title;
-  final String filePath;
-  final String driveFileId;
-  final String? content;
-  final DateTime? cachedAt;
-  final DateTime? updatedAt;
+  DateTime? get updatedAtDateTime =>
+      updatedAt == null ? null : DateTime.tryParse(updatedAt!);
 
-  Note copyWith({
-    int? id,
-    int? vaultId,
-    String? title,
-    String? filePath,
-    String? driveFileId,
-    String? content,
-    DateTime? cachedAt,
-    DateTime? updatedAt,
-  }) {
-    return Note(
-      id: id ?? this.id,
-      vaultId: vaultId ?? this.vaultId,
-      title: title ?? this.title,
-      filePath: filePath ?? this.filePath,
-      driveFileId: driveFileId ?? this.driveFileId,
-      content: content ?? this.content,
-      cachedAt: cachedAt ?? this.cachedAt,
-      updatedAt: updatedAt ?? this.updatedAt,
+  Note copyWithDateTime({DateTime? cachedAt, DateTime? updatedAt}) {
+    return copyWith(
+      cachedAt: cachedAt == null
+          ? const Value.absent()
+          : Value(cachedAt.toIso8601String()),
+      updatedAt: updatedAt == null
+          ? const Value.absent()
+          : Value(updatedAt.toIso8601String()),
     );
   }
-
-  Map<String, Object?> toMap() {
-    return <String, Object?>{
-      'id': id,
-      'vault_id': vaultId,
-      'title': title,
-      'file_path': filePath,
-      'drive_file_id': driveFileId,
-      'content': content,
-      'cached_at': cachedAt?.toIso8601String(),
-      'updated_at': updatedAt?.toIso8601String(),
-    };
-  }
-
-  static Note fromMap(Map<String, Object?> map) {
-    return Note(
-      id: map['id'] as int?,
-      vaultId: map['vault_id'] as int,
-      title: map['title'] as String,
-      filePath: map['file_path'] as String,
-      driveFileId: map['drive_file_id'] as String,
-      content: map['content'] as String?,
-      cachedAt: _dateTimeFromMap(map['cached_at']),
-      updatedAt: _dateTimeFromMap(map['updated_at']),
-    );
-  }
-}
-
-class WikilinkIndex {
-  const WikilinkIndex({
-    this.id,
-    required this.sourceNoteId,
-    required this.targetTitle,
-    this.targetNoteId,
-    this.alias,
-  });
-
-  final int? id;
-  final int sourceNoteId;
-  final String targetTitle;
-  final int? targetNoteId;
-  final String? alias;
-}
-
-class AppSettings {
-  const AppSettings({
-    this.selectedVaultId,
-    this.themeMode = 'system',
-    this.cacheSizeMB = 0,
-  });
-
-  final int? selectedVaultId;
-  final String themeMode;
-  final int cacheSizeMB;
 }
 
 class ScanProgress {
@@ -187,11 +82,3 @@ class ScanProgress {
 }
 
 enum ScanStatus { idle, syncing, complete, error }
-
-DateTime? _dateTimeFromMap(Object? value) {
-  if (value == null) {
-    return null;
-  }
-
-  return DateTime.tryParse(value as String);
-}

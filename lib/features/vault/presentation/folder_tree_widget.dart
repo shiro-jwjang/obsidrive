@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../domain/vault_models.dart';
 
@@ -63,7 +64,7 @@ class _TreeNodeTile extends StatelessWidget {
       contentPadding: EdgeInsets.only(left: 16 + depth * 20, right: 16),
       title: Text(file.name),
       onTap: () {
-        Navigator.of(context).pushNamed('/reader', arguments: file.note);
+        context.go('/reader', extra: file.note);
       },
     );
   }

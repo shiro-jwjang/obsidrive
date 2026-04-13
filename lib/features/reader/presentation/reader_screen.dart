@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 // ignore: depend_on_referenced_packages
 import 'package:markdown/markdown.dart' as md;
 
@@ -97,7 +98,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     }
 
     ref.read(currentNoteProvider.notifier).state = target;
-    Navigator.of(context).pushNamed('/reader', arguments: target);
+    context.go('/reader', extra: target);
   }
 }
 

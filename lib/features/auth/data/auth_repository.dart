@@ -201,6 +201,8 @@ class GoogleSignInUser {
 class GoogleSignInClient {
   GoogleSignInClient.googleSignIn()
     : _googleSignIn = GoogleSignIn(
+        clientId:
+            '487606084766-o8ocai47la9ne3b6he388shb5v4c234q.apps.googleusercontent.com',
         scopes: const <String>[AuthRepository.driveScope],
       ),
       _signIn = null,

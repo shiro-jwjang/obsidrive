@@ -1,26 +1,22 @@
 import 'dart:convert';
-import 'dart:io';
 
-import 'package:path_provider/path_provider.dart';
-import 'package:sqflite/sqflite.dart';
-
-import '../../../core/database.dart';
+import '../../../core/storage.dart';
 import '../../vault/domain/vault_models.dart';
 
 class CacheService {
   CacheService({
     required CacheMetadataStore store,
     required CacheDriveClient driveClient,
-    Directory? storageDirectory,
+    FileStorage? fileStorage,
     DateTime Function()? now,
   }) : _store = store,
        _driveClient = driveClient,
-       _storageDirectory = storageDirectory,
+       _fileStorage = fileStorage,
        _now = now ?? DateTime.now;
 
   final CacheMetadataStore _store;
   final CacheDriveClient _driveClient;
-  final Directory? _storageDirectory;
+  final FileStorage? _fileStorage;
   final DateTime Function() _now;
 
   Future<void> syncVault(
@@ -63,12 +59,17 @@ class CacheService {
       return null;
     }
 
-    final file = File(metadata.localPath);
-    if (!await file.exists()) {
+    final storage = _fileStorage;
+    if (storage == null) {
       return null;
     }
 
-    return file.readAsString();
+    final exists = await storage.exists(metadata.localPath);
+    if (!exists) {
+      return null;
+    }
+
+    return storage.readString(metadata.localPath);
   }
 
   Future<void> checkForUpdates(
@@ -91,38 +92,34 @@ class CacheService {
   }
 
   Future<void> _downloadToCache(Note note) async {
+    final storage = _fileStorage;
+    if (storage == null) return;
+
     final content = await _driveClient.downloadMarkdown(note.driveFileId);
-    final directory = await _cacheDirectory();
-    final file = File('${directory.path}/${_cacheFileName(note)}');
-    await file.writeAsString(content, flush: true);
-    final fileSize = await file.length();
+    final directory = await storage.getCacheDirectory();
+    final filePath = '$directory/${_cacheFileName(note)}';
+    await storage.writeString(filePath, content);
+    final fileSize = await storage.length(filePath);
     await _store.upsertCacheFile(
       CacheFileMetadata(
         fileId: note.driveFileId,
-        localPath: file.path,
+        localPath: filePath,
         cachedAt: _now(),
         fileSize: fileSize,
       ),
     );
   }
 
-  Future<Directory> _cacheDirectory() async {
-    final base = _storageDirectory ?? await getApplicationDocumentsDirectory();
-    final directory = Directory('${base.path}/offline_cache');
-    if (!await directory.exists()) {
-      await directory.create(recursive: true);
-    }
-
-    return directory;
-  }
-
   bool _isDriveVersionNewer(Note note, CacheFileMetadata metadata) {
-    final driveModifiedTime = note.updatedAt;
-    if (driveModifiedTime == null) {
+    final updatedAtStr = note.updatedAt;
+    if (updatedAtStr == null) {
       return false;
     }
-
-    return driveModifiedTime.isAfter(metadata.cachedAt);
+    final updatedAt = DateTime.tryParse(updatedAtStr);
+    if (updatedAt == null) {
+      return false;
+    }
+    return updatedAt.isAfter(metadata.cachedAt);
   }
 
   static bool _isMarkdownNote(Note note) {
@@ -145,51 +142,6 @@ abstract class CacheMetadataStore {
 
 abstract class CacheDriveClient {
   Future<String> downloadMarkdown(String fileId);
-}
-
-class SqliteCacheMetadataStore implements CacheMetadataStore {
-  SqliteCacheMetadataStore(this._appDatabase);
-
-  final AppDatabase _appDatabase;
-
-  @override
-  Future<CacheFileMetadata?> getCacheFile(String fileId) async {
-    final db = await _appDatabase.database;
-    final rows = await db.query(
-      'cache_files',
-      where: 'file_id = ?',
-      whereArgs: <Object?>[fileId],
-      limit: 1,
-    );
-    if (rows.isEmpty) {
-      return null;
-    }
-
-    return CacheFileMetadata.fromMap(rows.single);
-  }
-
-  @override
-  Future<CacheSummary> getCacheSummary() async {
-    final db = await _appDatabase.database;
-    final rows = await db.rawQuery(
-      'SELECT COUNT(*) AS file_count, COALESCE(SUM(file_size), 0) AS total_size FROM cache_files',
-    );
-    final row = rows.single;
-    return CacheSummary(
-      fileCount: row['file_count'] as int? ?? 0,
-      totalSizeBytes: row['total_size'] as int? ?? 0,
-    );
-  }
-
-  @override
-  Future<void> upsertCacheFile(CacheFileMetadata metadata) async {
-    final db = await _appDatabase.database;
-    await db.insert(
-      'cache_files',
-      metadata.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-  }
 }
 
 class CacheFileMetadata {

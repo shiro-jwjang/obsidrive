@@ -1,166 +1,171 @@
-import 'package:sqflite/sqflite.dart';
+import 'package:drift/drift.dart';
 
 import '../../../core/database.dart';
-import '../domain/vault_models.dart';
 
 class VaultRepository {
-  VaultRepository(this._appDatabase);
+  VaultRepository(this._db);
 
   static const _selectedVaultKey = 'selected_vault_id';
 
-  final AppDatabase _appDatabase;
+  final AppDatabase _db;
 
-  Future<List<Vault>> listVaults() async {
-    final db = await _appDatabase.database;
-    final rows = await db.query('vaults', orderBy: 'name COLLATE NOCASE ASC');
-    return rows.map(Vault.fromMap).toList();
+  Future<List<Vault>> listVaults() {
+    return (_db.select(
+      _db.vaults,
+    )..orderBy([(t) => OrderingTerm.asc(t.name)])).get();
   }
 
-  Future<Vault?> getVault(int id) async {
-    final db = await _appDatabase.database;
-    final rows = await db.query(
-      'vaults',
-      where: 'id = ?',
-      whereArgs: <Object?>[id],
-      limit: 1,
-    );
-    if (rows.isEmpty) {
-      return null;
-    }
-
-    return Vault.fromMap(rows.single);
+  Future<Vault?> getVault(int id) {
+    return (_db.select(
+      _db.vaults,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
   }
 
   Future<Vault> upsertVault(Vault vault) async {
-    final db = await _appDatabase.database;
-    final map = vault.toMap()..remove('id');
-    final existingId = vault.id;
-    if (existingId != null) {
-      await db.update(
-        'vaults',
-        map,
-        where: 'id = ?',
-        whereArgs: <Object?>[existingId],
+    // Try to find existing vault by driveFolderId
+    final existing =
+        await (_db.select(_db.vaults)
+              ..where((t) => t.driveFolderId.equals(vault.driveFolderId)))
+            .getSingleOrNull();
+
+    if (existing != null) {
+      await (_db.update(
+        _db.vaults,
+      )..where((t) => t.id.equals(existing.id))).write(
+        VaultsCompanion(
+          name: Value(vault.name),
+          driveFolderId: Value(vault.driveFolderId),
+          lastSyncedAt: Value(vault.lastSyncedAt),
+        ),
       );
-      return vault;
+      return existing.copyWith(
+        name: vault.name,
+        lastSyncedAt: vault.lastSyncedAt == null
+            ? const Value.absent()
+            : Value(vault.lastSyncedAt),
+      );
     }
 
-    final id = await db.insert(
-      'vaults',
-      map,
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    final id = await _db
+        .into(_db.vaults)
+        .insert(
+          VaultsCompanion.insert(
+            name: Value(vault.name),
+            driveFolderId: Value(vault.driveFolderId),
+            lastSyncedAt: Value(vault.lastSyncedAt),
+          ),
+          mode: InsertMode.insertOrReplace,
+        );
     return vault.copyWith(id: id);
   }
 
-  Future<void> deleteVault(int id) async {
-    final db = await _appDatabase.database;
-    await db.delete('vaults', where: 'id = ?', whereArgs: <Object?>[id]);
+  Future<void> deleteVault(int id) {
+    return (_db.delete(_db.vaults)..where((t) => t.id.equals(id))).go();
   }
 
-  Future<List<Note>> listNotes(int vaultId) async {
-    final db = await _appDatabase.database;
-    final rows = await db.query(
-      'notes',
-      where: 'vault_id = ?',
-      whereArgs: <Object?>[vaultId],
-      orderBy: 'file_path COLLATE NOCASE ASC',
-    );
-    return rows.map(Note.fromMap).toList();
+  Future<List<Note>> listNotes(int vaultId) {
+    return (_db.select(_db.notes)
+          ..where((t) => t.vaultId.equals(vaultId))
+          ..orderBy([(t) => OrderingTerm.asc(t.filePath)]))
+        .get();
   }
 
-  Future<Note?> getNote(int id) async {
-    final db = await _appDatabase.database;
-    final rows = await db.query(
-      'notes',
-      where: 'id = ?',
-      whereArgs: <Object?>[id],
-      limit: 1,
-    );
-    if (rows.isEmpty) {
-      return null;
-    }
-
-    return Note.fromMap(rows.single);
+  Future<Note?> getNote(int id) {
+    return (_db.select(
+      _db.notes,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
   }
 
   Future<Note> upsertNote(Note note) async {
-    final db = await _appDatabase.database;
-    final map = note.toMap()..remove('id');
-    final existingId = note.id;
-    if (existingId != null) {
-      await db.update(
-        'notes',
-        map,
-        where: 'id = ?',
-        whereArgs: <Object?>[existingId],
+    final existing = await getNote(note.id);
+    if (existing != null) {
+      await (_db.update(_db.notes)..where((t) => t.id.equals(note.id))).write(
+        NotesCompanion(
+          vaultId: Value(note.vaultId),
+          title: Value(note.title),
+          filePath: Value(note.filePath),
+          driveFileId: Value(note.driveFileId),
+          content: Value(note.content),
+          cachedAt: Value(note.cachedAt),
+          updatedAt: Value(note.updatedAt),
+        ),
       );
       return note;
     }
 
-    final id = await db.insert(
-      'notes',
-      map,
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-    return note.copyWith(id: id);
-  }
-
-  Future<void> deleteNote(int id) async {
-    final db = await _appDatabase.database;
-    await db.delete('notes', where: 'id = ?', whereArgs: <Object?>[id]);
-  }
-
-  Future<void> bulkInsertNotes(int vaultId, List<Note> notes) async {
-    final db = await _appDatabase.database;
-    await db.transaction((txn) async {
-      await txn.delete(
-        'notes',
-        where: 'vault_id = ?',
-        whereArgs: <Object?>[vaultId],
-      );
-      final batch = txn.batch();
-      for (final note in notes) {
-        batch.insert(
-          'notes',
-          note.copyWith(vaultId: vaultId).toMap()..remove('id'),
-          conflictAlgorithm: ConflictAlgorithm.replace,
+    await _db
+        .into(_db.notes)
+        .insert(
+          NotesCompanion.insert(
+            vaultId: Value(note.vaultId),
+            title: Value(note.title),
+            filePath: Value(note.filePath),
+            driveFileId: Value(note.driveFileId),
+            content: Value(note.content),
+            cachedAt: Value(note.cachedAt),
+            updatedAt: Value(note.updatedAt),
+          ),
+          mode: InsertMode.insertOrReplace,
         );
+    final inserted = await (_db.select(
+      _db.notes,
+    )..where((t) => t.driveFileId.equals(note.driveFileId))).getSingleOrNull();
+    return inserted ?? note;
+  }
+
+  Future<void> deleteNote(int id) {
+    return (_db.delete(_db.notes)..where((t) => t.id.equals(id))).go();
+  }
+
+  Future<void> bulkInsertNotes(int vaultId, List<NotesCompanion> notes) async {
+    await _db.transaction(() async {
+      // Delete existing notes for this vault
+      await (_db.delete(
+        _db.notes,
+      )..where((t) => t.vaultId.equals(vaultId))).go();
+      // Batch insert new notes
+      for (final note in notes) {
+        await _db
+            .into(_db.notes)
+            .insert(
+              NotesCompanion.insert(
+                vaultId: Value(vaultId),
+                title: note.title,
+                filePath: note.filePath,
+                driveFileId: note.driveFileId,
+                content: note.content,
+                cachedAt: note.cachedAt,
+                updatedAt: note.updatedAt,
+              ),
+              mode: InsertMode.insertOrReplace,
+            );
       }
-      await batch.commit(noResult: true);
     });
   }
 
   Future<int?> getSelectedVaultId() async {
-    final db = await _appDatabase.database;
-    final rows = await db.query(
-      'app_settings',
-      columns: const <String>['value'],
-      where: 'key = ?',
-      whereArgs: const <Object?>[_selectedVaultKey],
-      limit: 1,
-    );
-    if (rows.isEmpty) {
-      return null;
-    }
-
-    return int.tryParse(rows.single['value'] as String? ?? '');
+    final row = await (_db.select(
+      _db.appSettings,
+    )..where((t) => t.key.equals(_selectedVaultKey))).getSingleOrNull();
+    if (row == null) return null;
+    return int.tryParse(row.value ?? '');
   }
 
   Future<void> setSelectedVaultId(int vaultId) async {
-    final db = await _appDatabase.database;
-    await db.insert('app_settings', <String, Object?>{
-      'key': _selectedVaultKey,
-      'value': vaultId.toString(),
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    await _db
+        .into(_db.appSettings)
+        .insert(
+          AppSettingsCompanion(
+            key: Value(_selectedVaultKey),
+            value: Value(vaultId.toString()),
+          ),
+          mode: InsertMode.insertOrReplace,
+        );
   }
 
   Future<Vault?> getSelectedVault() async {
     final id = await getSelectedVaultId();
-    if (id == null) {
-      return null;
-    }
-
+    if (id == null) return null;
     return getVault(id);
   }
 }

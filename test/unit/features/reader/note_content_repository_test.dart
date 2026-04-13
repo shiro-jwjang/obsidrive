@@ -27,7 +27,7 @@ void main() {
       content: '# Cached',
       cachedAt: now.subtract(const Duration(minutes: 5)),
     );
-    store.notes[cached.id!] = cached;
+    store.notes[cached.id] = cached;
 
     final content = await createRepository().getContent(cached);
 
@@ -37,15 +37,15 @@ void main() {
 
   test('getContent fetches from Drive when not cached', () async {
     final uncached = note();
-    store.notes[uncached.id!] = uncached;
+    store.notes[uncached.id] = uncached;
     driveClient.contents[uncached.driveFileId] = '# Fresh';
 
     final content = await createRepository().getContent(uncached);
 
     expect(content, '# Fresh');
     expect(driveClient.downloadedFileIds, <String>[uncached.driveFileId]);
-    expect(store.notes[uncached.id!]!.content, '# Fresh');
-    expect(store.notes[uncached.id!]!.cachedAt, now);
+    expect(store.notes[uncached.id]!.content, '# Fresh');
+    expect(store.notes[uncached.id]!.cachedAt, now.toIso8601String());
   });
 
   test('getContent re-fetches when cache is stale', () async {
@@ -53,15 +53,15 @@ void main() {
       content: '# Old',
       cachedAt: now.subtract(const Duration(hours: 2)),
     );
-    store.notes[stale.id!] = stale;
+    store.notes[stale.id] = stale;
     driveClient.contents[stale.driveFileId] = '# Fresh';
 
     final content = await createRepository().getContent(stale);
 
     expect(content, '# Fresh');
     expect(driveClient.downloadedFileIds, <String>[stale.driveFileId]);
-    expect(store.notes[stale.id!]!.content, '# Fresh');
-    expect(store.notes[stale.id!]!.cachedAt, now);
+    expect(store.notes[stale.id]!.content, '# Fresh');
+    expect(store.notes[stale.id]!.cachedAt, now.toIso8601String());
   });
 }
 
@@ -73,8 +73,8 @@ Note note({String? content, DateTime? cachedAt}) {
     filePath: 'Daily Note.md',
     driveFileId: 'drive-note',
     content: content,
-    cachedAt: cachedAt,
-    updatedAt: DateTime.utc(2026, 4, 13, 8),
+    cachedAt: cachedAt?.toIso8601String(),
+    updatedAt: DateTime.utc(2026, 4, 13, 8).toIso8601String(),
   );
 }
 
@@ -91,7 +91,7 @@ class FakeNoteContentStore implements NoteContentStore {
 
   @override
   Future<Note> upsertNote(Note note) async {
-    notes[note.id!] = note;
+    notes[note.id] = note;
     return note;
   }
 }

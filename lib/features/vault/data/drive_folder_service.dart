@@ -1,5 +1,7 @@
+import 'package:drift/drift.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 
+import '../../../core/database.dart';
 import '../domain/vault_models.dart';
 
 abstract class DriveFilesClient {
@@ -82,11 +84,11 @@ class DriveFolderService {
     return folders;
   }
 
-  Future<List<Note>> scanVault({
+  Future<List<NotesCompanion>> scanVault({
     required int vaultId,
     required String rootFolderId,
   }) async {
-    final notes = <Note>[];
+    final notes = <NotesCompanion>[];
     await _scanFolder(
       notes: notes,
       vaultId: vaultId,
@@ -97,7 +99,7 @@ class DriveFolderService {
   }
 
   Future<void> _scanFolder({
-    required List<Note> notes,
+    required List<NotesCompanion> notes,
     required int vaultId,
     required String folderId,
     required String pathPrefix,
@@ -138,12 +140,12 @@ class DriveFolderService {
         }
 
         notes.add(
-          Note(
-            vaultId: vaultId,
-            title: _titleFromName(name),
-            filePath: '$pathPrefix$name',
-            driveFileId: id,
-            updatedAt: file.modifiedTime,
+          NotesCompanion.insert(
+            vaultId: Value(vaultId),
+            title: Value(_titleFromName(name)),
+            filePath: Value('$pathPrefix$name'),
+            driveFileId: Value(id),
+            updatedAt: Value(file.modifiedTime?.toIso8601String()),
           ),
         );
       }

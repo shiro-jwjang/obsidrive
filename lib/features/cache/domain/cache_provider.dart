@@ -1,12 +1,17 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:drift/drift.dart' as drift;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 // ignore: depend_on_referenced_packages
 import 'package:http/http.dart' as http;
 
+import '../../../core/database.dart';
+import '../../../core/storage.dart';
+import '../../../core/storage_io.dart';
+import '../../../core/storage_web.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../reader/data/note_content_repository.dart';
-import '../../vault/domain/vault_models.dart';
 import '../../vault/domain/vault_provider.dart';
 import '../data/cache_service.dart';
 
@@ -28,8 +33,15 @@ final isOnlineProvider = Provider<bool>((ref) {
   return results.any((result) => result != ConnectivityResult.none);
 });
 
+final fileStorageProvider = Provider<FileStorage>((ref) {
+  if (kIsWeb) {
+    return WebFileStorage();
+  }
+  return IoFileStorage();
+});
+
 final cacheMetadataStoreProvider = Provider<CacheMetadataStore>((ref) {
-  return SqliteCacheMetadataStore(ref.watch(appDatabaseProvider));
+  return DriftCacheMetadataStore(ref.watch(appDatabaseProvider));
 });
 
 final cacheDriveClientProvider = Provider<CacheDriveClient>((ref) {
@@ -50,6 +62,7 @@ final cacheServiceProvider = Provider<CacheService>((ref) {
   return CacheService(
     store: ref.watch(cacheMetadataStoreProvider),
     driveClient: ref.watch(cacheDriveClientProvider),
+    fileStorage: ref.watch(fileStorageProvider),
   );
 });
 
@@ -72,6 +85,58 @@ final cacheSyncControllerProvider = Provider<CacheSyncController>((ref) {
     },
   );
 });
+
+/// Drift-backed implementation of [CacheMetadataStore].
+///
+/// Bridges between the domain [CacheFileMetadata] type and the
+/// drift-generated [CacheFile] / [CacheFiles] table.
+class DriftCacheMetadataStore implements CacheMetadataStore {
+  DriftCacheMetadataStore(this._db);
+
+  final AppDatabase _db;
+
+  @override
+  Future<CacheFileMetadata?> getCacheFile(String fileId) async {
+    final row = await (_db.select(
+      _db.cacheFiles,
+    )..where((t) => t.fileId.equals(fileId))).getSingleOrNull();
+    if (row == null) return null;
+    return CacheFileMetadata(
+      fileId: row.fileId,
+      localPath: row.localPath,
+      cachedAt: DateTime.parse(row.cachedAt),
+      fileSize: row.fileSize,
+    );
+  }
+
+  @override
+  Future<CacheSummary> getCacheSummary() async {
+    final rows = await _db
+        .customSelect(
+          'SELECT COUNT(*) AS file_count, COALESCE(SUM(file_size), 0) AS total_size FROM cache_files',
+        )
+        .get();
+    final row = rows.single;
+    return CacheSummary(
+      fileCount: row.read<int>('file_count'),
+      totalSizeBytes: row.read<int>('total_size'),
+    );
+  }
+
+  @override
+  Future<void> upsertCacheFile(CacheFileMetadata metadata) async {
+    await _db
+        .into(_db.cacheFiles)
+        .insertOnConflictUpdate(
+          CacheFilesCompanion(
+            fileId: drift.Value(metadata.fileId),
+            localPath: drift.Value(metadata.localPath),
+            cachedAt: drift.Value(metadata.cachedAt.toIso8601String()),
+            fileSize: drift.Value(metadata.fileSize),
+          ),
+        );
+  }
+}
 
 class CacheSyncController {
   const CacheSyncController({

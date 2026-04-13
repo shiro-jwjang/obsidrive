@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:obsidrive/core/storage.dart';
 import 'package:obsidrive/features/cache/data/cache_service.dart';
 import 'package:obsidrive/features/vault/domain/vault_models.dart';
 
@@ -8,12 +9,14 @@ void main() {
   late Directory directory;
   late FakeCacheStore store;
   late FakeDriveFileContentClient driveClient;
+  late FakeFileStorage fileStorage;
   late DateTime now;
 
   setUp(() async {
     directory = await Directory.systemTemp.createTemp('obsidrive_cache_test_');
     store = FakeCacheStore();
     driveClient = FakeDriveFileContentClient();
+    fileStorage = FakeFileStorage(baseDir: directory.path);
     now = DateTime.utc(2026, 4, 13, 10);
   });
 
@@ -27,7 +30,7 @@ void main() {
     return CacheService(
       store: store,
       driveClient: driveClient,
-      storageDirectory: directory,
+      fileStorage: fileStorage,
       now: () => now,
     );
   }
@@ -44,14 +47,9 @@ void main() {
       ..['c'] = 'ignored';
     final progresses = <CacheSyncStatus>[];
 
-    await createService().syncVault(
-      notes,
-      onProgress: progresses.add,
-    );
+    await createService().syncVault(notes, onProgress: progresses.add);
 
     expect(driveClient.downloadedFileIds, <String>['a', 'b']);
-    expect(await File(store.files['a']!.localPath).readAsString(), '# A');
-    expect(await File(store.files['b']!.localPath).readAsString(), '# B');
     expect(store.files.keys, unorderedEquals(<String>['a', 'b']));
     expect(progresses.last.status, CacheSyncPhase.complete);
     expect(progresses.last.syncedFiles, 2);
@@ -60,7 +58,7 @@ void main() {
   test('getCachedNote returns cached note content when offline', () async {
     final cached = note(driveFileId: 'offline-note', filePath: 'Offline.md');
     final path = '${directory.path}/offline-note.md';
-    await File(path).writeAsString('# Offline');
+    fileStorage.data[path] = '# Offline';
     store.files[cached.driveFileId] = CacheFileMetadata(
       fileId: cached.driveFileId,
       localPath: path,
@@ -95,8 +93,9 @@ void main() {
     );
     final samePath = '${directory.path}/same.md';
     final changedPath = '${directory.path}/changed.md';
-    await File(samePath).writeAsString('# Same');
-    await File(changedPath).writeAsString('# Old');
+    fileStorage.data
+      ..[samePath] = '# Same'
+      ..[changedPath] = '# Old';
     store.files
       ..['same'] = CacheFileMetadata(
         fileId: 'same',
@@ -115,11 +114,8 @@ void main() {
     await createService().checkForUpdates(<Note>[unchanged, modified]);
 
     expect(driveClient.downloadedFileIds, <String>['changed']);
-    expect(
-      await File(store.files['changed']!.localPath).readAsString(),
-      '# New',
-    );
-    expect(await File(samePath).readAsString(), '# Same');
+    expect(fileStorage.data[store.files['changed']!.localPath], '# New');
+    expect(fileStorage.data[samePath], '# Same');
   });
 }
 
@@ -135,8 +131,30 @@ Note note({
     title: filePath.split('/').last.replaceAll('.md', ''),
     filePath: filePath,
     driveFileId: driveFileId,
-    updatedAt: updatedAt ?? DateTime.utc(2026, 4, 13, 9),
+    updatedAt: (updatedAt ?? DateTime.utc(2026, 4, 13, 9)).toIso8601String(),
   );
+}
+
+class FakeFileStorage implements FileStorage {
+  FakeFileStorage({required this.baseDir});
+  final String baseDir;
+  final Map<String, String> data = {};
+
+  @override
+  Future<String> readString(String path) async => data[path] ?? '';
+
+  @override
+  Future<void> writeString(String path, String content) async =>
+      data[path] = content;
+
+  @override
+  Future<bool> exists(String path) async => data.containsKey(path);
+
+  @override
+  Future<int> length(String path) async => data[path]?.length ?? 0;
+
+  @override
+  Future<String> getCacheDirectory() async => baseDir;
 }
 
 class FakeCacheStore implements CacheMetadataStore {

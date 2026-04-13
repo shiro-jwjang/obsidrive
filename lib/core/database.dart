@@ -1,94 +1,86 @@
-import 'package:path_provider/path_provider.dart';
-import 'package:sqflite/sqflite.dart';
+import 'package:drift/drift.dart';
+import 'package:drift_flutter/drift_flutter.dart';
 
-class AppDatabase {
-  AppDatabase({Database? database}) : _database = database;
+part 'database.g.dart';
 
-  static const databaseName = 'obsidrive.db';
-  static const databaseVersion = 2;
+class Vaults extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text().withDefault(const Constant(''))();
+  TextColumn get driveFolderId =>
+      text().withDefault(const Constant('')).unique()();
+  TextColumn get lastSyncedAt => text().nullable()();
+}
 
-  Database? _database;
+class Notes extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get vaultId =>
+      integer().withDefault(const Constant(0)).references(Vaults, #id)();
+  TextColumn get title => text().withDefault(const Constant(''))();
+  TextColumn get filePath => text().withDefault(const Constant(''))();
+  TextColumn get driveFileId => text().withDefault(const Constant(''))();
+  TextColumn get content => text().nullable()();
+  TextColumn get cachedAt => text().nullable()();
+  TextColumn get updatedAt => text().nullable()();
 
-  Future<Database> get database async {
-    final existing = _database;
-    if (existing != null) {
-      return existing;
-    }
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {vaultId, driveFileId},
+  ];
+}
 
-    final directory = await getApplicationDocumentsDirectory();
-    final path = '${directory.path}/$databaseName';
-    final opened = await openDatabase(
-      path,
-      version: databaseVersion,
-      onCreate: (db, version) => _ensureSchema(db),
-      onUpgrade: (db, oldVersion, newVersion) => _ensureSchema(db),
-      onOpen: _ensureSchema,
-    );
-    _database = opened;
-    return opened;
-  }
+class WikilinkIndex extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get sourceNoteId => integer()
+      .withDefault(const Constant(0))
+      .references(
+        Notes,
+        #id,
+        onUpdate: KeyAction.cascade,
+        onDelete: KeyAction.cascade,
+      )();
+  TextColumn get targetTitle => text().withDefault(const Constant(''))();
+  IntColumn get targetNoteId => integer().nullable().references(
+    Notes,
+    #id,
+    onUpdate: KeyAction.cascade,
+    onDelete: KeyAction.setNull,
+  )();
+  TextColumn get alias => text().nullable()();
+}
 
-  static Future<void> _ensureSchema(Database db) async {
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS vaults (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        drive_folder_id TEXT NOT NULL UNIQUE,
-        last_synced_at TEXT
-      )
-    ''');
+class AppSettings extends Table {
+  TextColumn get key => text().withDefault(const Constant(''))();
+  TextColumn get value => text().nullable()();
 
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS notes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        vault_id INTEGER NOT NULL,
-        title TEXT NOT NULL,
-        file_path TEXT NOT NULL,
-        drive_file_id TEXT NOT NULL,
-        content TEXT,
-        cached_at TEXT,
-        updated_at TEXT,
-        UNIQUE(vault_id, drive_file_id),
-        FOREIGN KEY(vault_id) REFERENCES vaults(id) ON DELETE CASCADE
-      )
-    ''');
+  @override
+  Set<Column> get primaryKey => {key};
+}
 
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS wikilink_index (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        source_note_id INTEGER NOT NULL,
-        target_title TEXT NOT NULL,
-        target_note_id INTEGER,
-        alias TEXT,
-        FOREIGN KEY(source_note_id) REFERENCES notes(id) ON DELETE CASCADE,
-        FOREIGN KEY(target_note_id) REFERENCES notes(id) ON DELETE SET NULL
-      )
-    ''');
+class CacheFiles extends Table {
+  TextColumn get fileId => text().withDefault(const Constant(''))();
+  TextColumn get localPath => text().withDefault(const Constant(''))();
+  TextColumn get cachedAt => text().withDefault(const Constant(''))();
+  IntColumn get fileSize => integer().withDefault(const Constant(0))();
 
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS app_settings (
-        key TEXT PRIMARY KEY,
-        value TEXT
-      )
-    ''');
+  @override
+  Set<Column> get primaryKey => {fileId};
+}
 
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS cache_files (
-        file_id TEXT PRIMARY KEY,
-        local_path TEXT NOT NULL,
-        cached_at TEXT NOT NULL,
-        file_size INTEGER NOT NULL
-      )
-    ''');
+@DriftDatabase(tables: [Vaults, Notes, WikilinkIndex, AppSettings, CacheFiles])
+class AppDatabase extends _$AppDatabase {
+  AppDatabase([QueryExecutor? executor])
+    : super(executor ?? driftDatabase(name: 'obsidrive.db'));
 
-    await db.execute(
-      'CREATE INDEX IF NOT EXISTS idx_notes_vault_path ON notes(vault_id, file_path)',
-    );
-    await db.execute(
-      'CREATE INDEX IF NOT EXISTS idx_wikilink_source ON wikilink_index(source_note_id)',
-    );
-    await db.execute(
-      'CREATE INDEX IF NOT EXISTS idx_cache_files_cached_at ON cache_files(cached_at)',
-    );
-  }
+  @override
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (Migrator m) async {
+      await m.createAll();
+    },
+    onUpgrade: (Migrator m, int from, int to) async {
+      await m.createAll();
+    },
+  );
 }

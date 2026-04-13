@@ -130,9 +130,8 @@ class _VaultPickerScreenState extends ConsumerState<VaultPickerScreen> {
 
   Future<void> _selectVault(DriveFolder folder) async {
     final vault = await ref.read(vaultScannerProvider).scanAndSyncVault(folder);
-    final vaultId = vault.id;
-    if (vaultId != null && ref.read(isOnlineProvider)) {
-      final notes = await ref.read(vaultRepositoryProvider).listNotes(vaultId);
+    if (ref.read(isOnlineProvider)) {
+      final notes = await ref.read(vaultRepositoryProvider).listNotes(vault.id);
       await ref.read(cacheSyncControllerProvider).syncVault(notes);
     }
     if (mounted) {

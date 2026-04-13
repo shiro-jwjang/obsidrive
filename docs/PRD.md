@@ -109,7 +109,7 @@
 | 인증 | Google Sign-In (OAuth2) | google_sign_in 패키지 |
 | 구글드라이브 | Google Drive API v3 (REST) | googleapis 패키지 |
 | 상태관리 | Riverpod 2.x | |
-| 로컬 DB | Isar (또는 drift/SQLite) | 파일 메타데이터 + 인덱스 |
+| 로컬 DB | drift (SQLite/IndexedDB) | 웹+모바일 호환, 파일 메타데이터 + 인덱스 |
 | 마크다운 | flutter_markdown + 커스텀 확장 | 위키링크, 태그 파싱 |
 | 파일 캐시 | path_provider + 로컬 파일시스템 | |
 | 테스트 | flutter_test + mockito | TDD |
@@ -176,7 +176,7 @@ test/
 
 - google_sign_in으로 사용자 인증 → access_token + refresh_token 획득
 - googleapis 패키지로 Drive API v3 호출
-- 토큰은 flutter_secure_storage에 암호화 저장
+- 토큰은 shared_preferences에 저장 (웹 호환). 인터페이스 분리로 플랫폼별 보안 강화 가능
 - refresh_token으로 자동 갱신
 
 ---

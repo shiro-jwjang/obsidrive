@@ -7,13 +7,7 @@ final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
 });
 
 final themeModeControllerProvider =
-    StateNotifierProvider<ThemeModeController, ThemeMode>((ref) {
-      final controller = ThemeModeController(
-        ref.watch(settingsRepositoryProvider),
-      );
-      controller.load();
-      return controller;
-    });
+    NotifierProvider<ThemeModeController, ThemeMode>(ThemeModeController.new);
 
 class SettingsRepository {
   SettingsRepository({SharedPreferences? preferences})
@@ -46,13 +40,21 @@ class SettingsRepository {
   }
 }
 
-class ThemeModeController extends StateNotifier<ThemeMode> {
-  ThemeModeController(this._repository) : super(ThemeMode.system);
+class ThemeModeController extends Notifier<ThemeMode> {
+  @override
+  ThemeMode build() {
+    // Kick off an async load; when it completes it will update state.
+    Future.microtask(() => _load());
+    return ThemeMode.system;
+  }
 
-  final SettingsRepository _repository;
+  SettingsRepository get _repository => ref.read(settingsRepositoryProvider);
 
-  Future<void> load() async {
-    state = await _repository.getThemeMode();
+  Future<void> _load() async {
+    final mode = await _repository.getThemeMode();
+    if (state != mode) {
+      state = mode;
+    }
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
