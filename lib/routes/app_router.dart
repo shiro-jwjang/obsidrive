@@ -14,9 +14,20 @@ import '../../features/vault/domain/vault_provider.dart';
 import '../../features/vault/presentation/folder_tree_widget.dart';
 import '../../features/vault/presentation/vault_picker_screen.dart';
 
+class _AuthNotifier extends ChangeNotifier {
+  _AuthNotifier(Ref ref) {
+    ref.listen(authControllerProvider, (_, __) {
+      notifyListeners();
+    });
+  }
+}
+
 final appRouterProvider = Provider<GoRouter>((ref) {
+  final notifier = _AuthNotifier(ref);
+
   return GoRouter(
     initialLocation: '/',
+    refreshListenable: notifier,
     redirect: (context, state) {
       final authState = ref.read(authControllerProvider);
       final isAuthenticating = state.matchedLocation == '/login';
