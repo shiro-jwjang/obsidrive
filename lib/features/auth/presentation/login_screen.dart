@@ -3,13 +3,28 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/auth_state.dart';
 
-class LoginScreen extends ConsumerWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends ConsumerState<LoginScreen> {
+  bool _restored = false;
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
     final authController = ref.read(authControllerProvider.notifier);
+
+    // Auto-restore session on first build
+    if (!_restored) {
+      _restored = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        authController.restoreSession();
+      });
+    }
 
     return Scaffold(
       body: SafeArea(
