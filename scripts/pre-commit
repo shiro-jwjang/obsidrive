@@ -1,0 +1,16 @@
+#!/bin/bash
+# Pre-commit hook: format check + analyze
+# Install: cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+
+set -e
+
+echo "🔍 Running dart format check..."
+/home/openclaw/flutter/bin/dart format --set-exit-if-changed lib/ test/
+echo "✅ Format OK"
+
+echo "🔍 Running flutter analyze..."
+/home/openclaw/flutter/bin/flutter analyze --no-fatal-infos --no-fatal-warnings 2>&1
+echo "✅ Analyze OK"
+
+echo ""
+echo "All checks passed. Committing..."

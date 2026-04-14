@@ -69,7 +69,17 @@ class CacheFiles extends Table {
 @DriftDatabase(tables: [Vaults, Notes, WikilinkIndex, AppSettings, CacheFiles])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor])
-    : super(executor ?? driftDatabase(name: 'obsidrive.db'));
+    : super(executor ?? _defaultExecutor());
+
+  static QueryExecutor _defaultExecutor() {
+    return driftDatabase(
+      name: 'obsidrive.db',
+      web: DriftWebOptions(
+        sqlite3Wasm: Uri.parse('sqlite3.wasm'),
+        driftWorker: Uri.parse('drift_worker.js'),
+      ),
+    );
+  }
 
   @override
   int get schemaVersion => 2;
