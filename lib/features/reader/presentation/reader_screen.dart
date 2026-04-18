@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/markdown_parser.dart';
 import '../../vault/domain/vault_models.dart';
@@ -98,6 +99,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/home'),
+        ),
         title: _isEditing ? _buildTitleField(context) : Text(note.title),
         actions: [
           if (_isEditing) ...[
