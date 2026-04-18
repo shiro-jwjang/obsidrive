@@ -63,6 +63,39 @@ void main() {
     expect(store.notes[stale.id]!.content, '# Fresh');
     expect(store.notes[stale.id]!.cachedAt, now.toIso8601String());
   });
+
+  test('renameNote preserves markdown extension in Drive filename', () async {
+    final original = note();
+    store.notes[original.id] = original;
+
+    final renamed = await createRepository().renameNote(original, 'New Title');
+
+    expect(driveClient.renamedFiles, <String, String>{
+      original.driveFileId: 'New Title.md',
+    });
+    expect(renamed.title, 'New Title');
+    expect(renamed.filePath, 'New Title.md');
+    expect(store.notes[original.id]!.title, 'New Title');
+  });
+
+  test(
+    'renameNote preserves folder path and avoids duplicate md suffix',
+    () async {
+      final original = note().copyWith(filePath: 'Journal/Daily Note.md');
+      store.notes[original.id] = original;
+
+      final renamed = await createRepository().renameNote(
+        original,
+        'Weekly Note.md',
+      );
+
+      expect(driveClient.renamedFiles, <String, String>{
+        original.driveFileId: 'Weekly Note.md',
+      });
+      expect(renamed.title, 'Weekly Note');
+      expect(renamed.filePath, 'Journal/Weekly Note.md');
+    },
+  );
 }
 
 Note note({String? content, DateTime? cachedAt}) {
@@ -99,6 +132,7 @@ class FakeNoteContentStore implements NoteContentStore {
 class FakeDriveFileContentClient implements DriveFileContentClient {
   final contents = <String, String>{};
   final downloadedFileIds = <String>[];
+  final renamedFiles = <String, String>{};
 
   @override
   Future<String> downloadMarkdown(String fileId) async {
@@ -109,5 +143,10 @@ class FakeDriveFileContentClient implements DriveFileContentClient {
   @override
   Future<void> uploadMarkdown(String fileId, String content) async {
     contents[fileId] = content;
+  }
+
+  @override
+  Future<void> renameFile(String fileId, String name) async {
+    renamedFiles[fileId] = name;
   }
 }

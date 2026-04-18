@@ -59,10 +59,10 @@ class _HtmlMarkdownEditorState extends State<_HtmlMarkdownEditor> {
     wrapper.id = _editorId;
     final ws = wrapper.style;
     ws.position = 'fixed';
-    ws.top = '0';
+    ws.top = '56px';
     ws.left = '0';
     ws.width = '100%';
-    ws.height = '100%';
+    ws.height = 'calc(100% - 56px)';
     ws.zIndex = '200';
     ws.backgroundColor = '#ffffff';
     ws.display = 'flex';

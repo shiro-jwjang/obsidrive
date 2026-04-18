@@ -10,6 +10,7 @@ import '../../vault/domain/vault_models.dart';
 abstract class DriveFileContentClient {
   Future<String> downloadMarkdown(String fileId);
   Future<void> uploadMarkdown(String fileId, String content);
+  Future<void> renameFile(String fileId, String name);
 }
 
 class GoogleDriveFileContentClient implements DriveFileContentClient {
@@ -38,6 +39,15 @@ class GoogleDriveFileContentClient implements DriveFileContentClient {
       drive.File(),
       fileId,
       uploadMedia: media,
+      supportsAllDrives: true,
+    );
+  }
+
+  @override
+  Future<void> renameFile(String fileId, String name) async {
+    await _api.files.update(
+      drive.File(name: name),
+      fileId,
       supportsAllDrives: true,
     );
   }
@@ -128,6 +138,17 @@ class NoteContentRepository {
     );
   }
 
+  Future<Note> renameNote(Note note, String newTitle) async {
+    final trimmedTitle = newTitle.trim();
+    if (trimmedTitle.isEmpty) {
+      throw ArgumentError('파일 이름을 입력해 주세요.');
+    }
+
+    final renamed = _renamedNote(note, trimmedTitle);
+    await _driveClient.renameFile(note.driveFileId, _fileNameFromPath(renamed));
+    return _store.upsertNote(renamed);
+  }
+
   Future<Note?> resolveNote(int vaultId, String target) async {
     final notes = await _store.listNotes(vaultId);
     final normalizedTarget = _normalizedTarget(target);
@@ -197,6 +218,43 @@ class NoteContentRepository {
     final separator = trimmed.lastIndexOf('/');
     final title = separator == -1 ? trimmed : trimmed.substring(separator + 1);
     return title.toLowerCase();
+  }
+
+  Note _renamedNote(Note note, String newTitle) {
+    final folderPrefix = _folderPrefix(note.filePath);
+    final hasMarkdownExtension = note.filePath.toLowerCase().endsWith('.md');
+    final title = hasMarkdownExtension
+        ? _withoutMarkdownExtension(newTitle)
+        : newTitle;
+    final fileName = hasMarkdownExtension ? '$title.md' : title;
+
+    return note.copyWith(title: title, filePath: '$folderPrefix$fileName');
+  }
+
+  String _folderPrefix(String filePath) {
+    final separator = filePath.lastIndexOf('/');
+    if (separator == -1) {
+      return '';
+    }
+
+    return filePath.substring(0, separator + 1);
+  }
+
+  String _fileNameFromPath(Note note) {
+    final separator = note.filePath.lastIndexOf('/');
+    if (separator == -1) {
+      return note.filePath;
+    }
+
+    return note.filePath.substring(separator + 1);
+  }
+
+  String _withoutMarkdownExtension(String value) {
+    if (value.toLowerCase().endsWith('.md')) {
+      return value.substring(0, value.length - 3);
+    }
+
+    return value;
   }
 }
 

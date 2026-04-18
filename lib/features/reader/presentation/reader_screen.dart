@@ -17,6 +17,15 @@ class ReaderScreen extends ConsumerStatefulWidget {
 class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   bool _isEditing = false;
   bool _isSaving = false;
+  late final TextEditingController _titleController;
+  late final FocusNode _titleFocusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController();
+    _titleFocusNode = FocusNode();
+  }
 
   @override
   void didChangeDependencies() {
@@ -34,8 +43,18 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   Future<void> _saveContent(Note note, String content) async {
     setState(() => _isSaving = true);
     try {
-      await ref.read(noteContentRepositoryProvider).saveContent(note, content);
+      final repository = ref.read(noteContentRepositoryProvider);
+      var savedNote = note;
+      final newTitle = _titleController.text.trim();
+      if (newTitle != note.title) {
+        savedNote = await repository.renameNote(note, newTitle);
+        ref.read(currentNoteProvider.notifier).state = savedNote;
+      }
+
+      await repository.saveContent(savedNote, content);
       ref.invalidate(noteContentProvider(note));
+      ref.invalidate(noteContentProvider(savedNote));
+      ref.invalidate(vaultWikilinksProvider(savedNote.vaultId));
       setState(() {
         _isEditing = false;
         _isSaving = false;
@@ -56,9 +75,19 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   @override
+  void dispose() {
+    _titleController.dispose();
+    _titleFocusNode.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final routeNote = ModalRoute.of(context)?.settings.arguments;
-    final note = routeNote is Note ? routeNote : ref.watch(currentNoteProvider);
+    final currentNote = ref.watch(currentNoteProvider);
+    final note = routeNote is Note && currentNote?.id != routeNote.id
+        ? routeNote
+        : currentNote ?? (routeNote is Note ? routeNote : null);
 
     if (note == null) {
       return const Scaffold(body: Center(child: Text('열 노트를 선택해 주세요.')));
@@ -69,7 +98,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(note.title),
+        title: _isEditing ? _buildTitleField(context) : Text(note.title),
         actions: [
           if (_isEditing) ...[
             if (_isSaving)
@@ -88,9 +117,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               icon: const Icon(Icons.edit_outlined),
               tooltip: '편집',
               onPressed: content.hasValue && content.value != null
-                  ? () {
-                      setState(() => _isEditing = true);
-                    }
+                  ? () => _startEditing(note)
                   : null,
             ),
           ],
@@ -131,6 +158,45 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 ),
               ),
             ),
+    );
+  }
+
+  void _startEditing(Note note) {
+    _titleController.text = note.title;
+    _titleController.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: note.title.length,
+    );
+    setState(() => _isEditing = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _titleFocusNode.requestFocus();
+      _titleController.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _titleController.text.length,
+      );
+    });
+  }
+
+  Widget _buildTitleField(BuildContext context) {
+    final theme = Theme.of(context);
+    final titleStyle =
+        theme.appBarTheme.titleTextStyle ?? theme.textTheme.titleLarge;
+
+    return TextField(
+      controller: _titleController,
+      focusNode: _titleFocusNode,
+      maxLength: 255,
+      style: titleStyle,
+      decoration: const InputDecoration(
+        border: UnderlineInputBorder(),
+        enabledBorder: UnderlineInputBorder(),
+        focusedBorder: UnderlineInputBorder(),
+        counterText: '',
+        isDense: true,
+      ),
+      textInputAction: TextInputAction.done,
+      enabled: !_isSaving,
     );
   }
 
