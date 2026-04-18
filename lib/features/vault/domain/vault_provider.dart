@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 // ignore: depend_on_referenced_packages
@@ -45,6 +47,38 @@ final selectedVaultNotesProvider = FutureProvider<List<Note>>((ref) async {
   }
 
   return ref.watch(vaultRepositoryProvider).listNotes(vault.id);
+});
+
+final noteSearchProvider = FutureProvider.family<List<Note>, String>((
+  ref,
+  query,
+) async {
+  final trimmed = query.trim();
+  if (trimmed.isEmpty) {
+    return const <Note>[];
+  }
+
+  var cancelled = false;
+  final completer = Completer<void>();
+  final timer = Timer(const Duration(milliseconds: 300), completer.complete);
+  ref.onDispose(() {
+    cancelled = true;
+    timer.cancel();
+    if (!completer.isCompleted) {
+      completer.complete();
+    }
+  });
+  await completer.future;
+  if (cancelled) {
+    return const <Note>[];
+  }
+
+  final vault = await ref.watch(selectedVaultProvider.future);
+  if (vault == null) {
+    return const <Note>[];
+  }
+
+  return ref.watch(vaultRepositoryProvider).searchNotes(vault.id, trimmed);
 });
 
 /// Tracks overall scan progress (quickSync + fullScan phases).

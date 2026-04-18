@@ -141,7 +141,7 @@ class _AuthGate extends ConsumerWidget {
 }
 
 /// Main home screen showing the vault tree and cache controls.
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({
     required this.vault,
     required this.notes,
@@ -156,10 +156,25 @@ class HomeScreen extends ConsumerWidget {
   final ScanProgress scanProgress;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  final _searchController = TextEditingController();
+  var _isSearching = false;
+  var _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     ref.listen<bool>(isOnlineProvider, (previous, next) {
       if (previous == false && next) {
-        ref.read(cacheSyncControllerProvider).checkForUpdates(notes);
+        ref.read(cacheSyncControllerProvider).checkForUpdates(widget.notes);
       }
     });
 
@@ -168,40 +183,222 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(vault.name),
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: '노트 검색...',
+                  border: InputBorder.none,
+                ),
+                textInputAction: TextInputAction.search,
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value;
+                  });
+                },
+              )
+            : Text(widget.vault.name),
         actions: <Widget>[
-          IconButton(
-            tooltip: '오프라인 동기화',
-            onPressed: isOnline && syncStatus.status != CacheSyncPhase.syncing
-                ? () => ref.read(cacheSyncControllerProvider).syncVault(notes)
-                : null,
-            icon: const Icon(Icons.sync),
-          ),
-          IconButton(
-            tooltip: '설정',
-            onPressed: () => context.go('/settings'),
-            icon: const Icon(Icons.settings_outlined),
-          ),
+          if (_isSearching)
+            IconButton(
+              tooltip: '검색 닫기',
+              onPressed: _closeSearch,
+              icon: const Icon(Icons.close),
+            )
+          else ...<Widget>[
+            IconButton(
+              tooltip: '노트 검색',
+              onPressed: _openSearch,
+              icon: const Icon(Icons.search),
+            ),
+            IconButton(
+              tooltip: '오프라인 동기화',
+              onPressed: isOnline && syncStatus.status != CacheSyncPhase.syncing
+                  ? () => ref
+                        .read(cacheSyncControllerProvider)
+                        .syncVault(widget.notes)
+                  : null,
+              icon: const Icon(Icons.sync),
+            ),
+            IconButton(
+              tooltip: '설정',
+              onPressed: () => context.go('/settings'),
+              icon: const Icon(Icons.settings_outlined),
+            ),
+          ],
         ],
       ),
       body: Column(
         children: <Widget>[
           if (!isOnline) const OfflineBanner(),
-          CacheProgress(status: syncStatus),
-          if (scanProgress.status == ScanStatus.syncing &&
-              scanProgress.phase == ScanPhase.fullScan)
-            _FullScanProgress(progress: scanProgress),
+          if (!_isSearching) CacheProgress(status: syncStatus),
+          if (!_isSearching &&
+              widget.scanProgress.status == ScanStatus.syncing &&
+              widget.scanProgress.phase == ScanPhase.fullScan)
+            _FullScanProgress(progress: widget.scanProgress),
           Expanded(
-            child: FolderTreeWidget(
-              vault: vault,
-              folders: folders,
-              notes: notes,
-            ),
+            child: _isSearching
+                ? _NoteSearchResults(query: _searchQuery)
+                : FolderTreeWidget(
+                    vault: widget.vault,
+                    folders: widget.folders,
+                    notes: widget.notes,
+                  ),
           ),
         ],
       ),
     );
   }
+
+  void _openSearch() {
+    setState(() {
+      _isSearching = true;
+    });
+  }
+
+  void _closeSearch() {
+    _searchController.clear();
+    setState(() {
+      _isSearching = false;
+      _searchQuery = '';
+    });
+  }
+}
+
+class _NoteSearchResults extends ConsumerWidget {
+  const _NoteSearchResults({required this.query});
+
+  final String query;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final results = ref.watch(noteSearchProvider(query));
+
+    return results.when(
+      data: (notes) {
+        if (notes.isEmpty) {
+          return const Center(child: Text('검색 결과가 없습니다'));
+        }
+
+        return ListView.builder(
+          itemCount: notes.length,
+          itemBuilder: (context, index) {
+            final note = notes[index];
+            return ListTile(
+              leading: const Icon(Icons.description_outlined),
+              title: Text(
+                note.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: _HighlightedPreview(note: note, query: query),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              onTap: () {
+                context.push('/reader', extra: note);
+              },
+            );
+          },
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, stackTrace) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text('검색 중 오류가 발생했습니다.\n$error'),
+        ),
+      ),
+    );
+  }
+}
+
+class _HighlightedPreview extends StatelessWidget {
+  const _HighlightedPreview({required this.note, required this.query});
+
+  final Note note;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    final preview = _buildPreview(note.content ?? '', query);
+    if (preview.text.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final theme = Theme.of(context);
+    return RichText(
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        children: <TextSpan>[
+          TextSpan(text: preview.before),
+          if (preview.match.isNotEmpty)
+            TextSpan(
+              text: preview.match,
+              style: TextStyle(
+                backgroundColor: theme.colorScheme.secondaryContainer,
+                color: theme.colorScheme.onSecondaryContainer,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          TextSpan(text: preview.after),
+        ],
+      ),
+    );
+  }
+
+  _PreviewText _buildPreview(String content, String query) {
+    final normalized = content.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.isEmpty) {
+      return const _PreviewText('', '', '');
+    }
+
+    final trimmedQuery = query.trim();
+    final matchIndex = trimmedQuery.isEmpty
+        ? -1
+        : normalized.toLowerCase().indexOf(trimmedQuery.toLowerCase());
+
+    if (matchIndex == -1) {
+      return _PreviewText(_truncate(normalized, 80), '', '');
+    }
+
+    final start = (matchIndex - 30).clamp(0, normalized.length).toInt();
+    final matchEnd = (matchIndex + trimmedQuery.length)
+        .clamp(0, normalized.length)
+        .toInt();
+    final end = (matchEnd + 50).clamp(0, normalized.length).toInt();
+    final prefix = start > 0 ? '...' : '';
+    final suffix = end < normalized.length ? '...' : '';
+
+    return _PreviewText(
+      '$prefix${normalized.substring(start, matchIndex)}',
+      normalized.substring(matchIndex, matchEnd),
+      '${normalized.substring(matchEnd, end)}$suffix',
+    );
+  }
+
+  String _truncate(String text, int maxLength) {
+    if (text.length <= maxLength) {
+      return text;
+    }
+    return '${text.substring(0, maxLength)}...';
+  }
+}
+
+class _PreviewText {
+  const _PreviewText(this.before, this.match, this.after);
+
+  final String before;
+  final String match;
+  final String after;
+
+  String get text => '$before$match$after';
 }
 
 /// Shows full scan progress in the HomeScreen.

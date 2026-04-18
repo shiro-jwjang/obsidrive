@@ -70,6 +70,51 @@ class VaultRepository {
         .get();
   }
 
+  Future<List<Note>> searchNotes(int vaultId, String query) {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
+      return Future.value(const <Note>[]);
+    }
+
+    final pattern = '%${_escapeLike(trimmed.toLowerCase())}%';
+
+    return _db
+        .customSelect(
+          '''
+          SELECT *
+          FROM notes
+          WHERE vault_id = ?
+            AND (
+              LOWER(title) LIKE ? ESCAPE '\\'
+              OR LOWER(COALESCE(content, '')) LIKE ? ESCAPE '\\'
+            )
+          ORDER BY
+            CASE
+              WHEN LOWER(title) LIKE ? ESCAPE '\\' THEN 0
+              ELSE 1
+            END,
+            title COLLATE NOCASE ASC
+          LIMIT 50
+          ''',
+          variables: <Variable<Object>>[
+            Variable<int>(vaultId),
+            Variable<String>(pattern),
+            Variable<String>(pattern),
+            Variable<String>(pattern),
+          ],
+          readsFrom: {_db.notes},
+        )
+        .map((row) => _db.notes.map(row.data))
+        .get();
+  }
+
+  String _escapeLike(String value) {
+    return value
+        .replaceAll(r'\', r'\\')
+        .replaceAll('%', r'\%')
+        .replaceAll('_', r'\_');
+  }
+
   /// List notes whose filePath places them directly inside [folderPath].
   /// If [folderPath] is empty, returns root-level notes only (no '/' in path).
   Future<List<Note>> listNotesInFolder(int vaultId, String folderPath) async {
