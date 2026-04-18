@@ -16,7 +16,7 @@ import '../../features/vault/presentation/vault_picker_screen.dart';
 
 class _AuthNotifier extends ChangeNotifier {
   _AuthNotifier(Ref ref) {
-    ref.listen(authControllerProvider, (_, __) {
+    ref.listen(authControllerProvider, (previous, next) {
       notifyListeners();
     });
   }
@@ -43,23 +43,42 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(
+        path: '/login',
+        pageBuilder: (context, state) =>
+            NoTransitionPage(key: state.pageKey, child: const LoginScreen()),
+      ),
       GoRoute(
         path: '/vault-picker',
-        builder: (context, state) => const VaultPickerScreen(),
+        pageBuilder: (context, state) => NoTransitionPage(
+          key: state.pageKey,
+          child: const VaultPickerScreen(),
+        ),
       ),
-      GoRoute(path: '/', builder: (context, state) => const _AuthGate()),
-      GoRoute(path: '/home', builder: (context, state) => const _AuthGate()),
+      GoRoute(
+        path: '/',
+        pageBuilder: (context, state) =>
+            NoTransitionPage(key: state.pageKey, child: const _AuthGate()),
+      ),
+      GoRoute(
+        path: '/home',
+        pageBuilder: (context, state) =>
+            NoTransitionPage(key: state.pageKey, child: const _AuthGate()),
+      ),
       GoRoute(
         path: '/reader',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final note = state.extra as Note?;
-          return ReaderScreenWithNote(note: note);
+          return NoTransitionPage(
+            key: state.pageKey,
+            child: ReaderScreenWithNote(note: note),
+          );
         },
       ),
       GoRoute(
         path: '/settings',
-        builder: (context, state) => const SettingsScreen(),
+        pageBuilder: (context, state) =>
+            NoTransitionPage(key: state.pageKey, child: const SettingsScreen()),
       ),
     ],
   );
@@ -79,8 +98,19 @@ class _AuthGate extends ConsumerWidget {
         }
 
         final notes = ref.watch(selectedVaultNotesProvider);
+        final folders = ref.watch(folderTreeProvider);
+        final scanProgress = ref.watch(scanProgressProvider);
+
         return notes.when(
-          data: (items) => HomeScreen(vault: vault, notes: items),
+          data: (items) {
+            final folderList = folders.valueOrNull ?? const <DriveFolder>[];
+            return HomeScreen(
+              vault: vault,
+              notes: items,
+              folders: folderList,
+              scanProgress: scanProgress,
+            );
+          },
           loading: () => Scaffold(
             appBar: AppBar(title: Text(vault.name)),
             body: const Center(child: CircularProgressIndicator()),
@@ -112,10 +142,18 @@ class _AuthGate extends ConsumerWidget {
 
 /// Main home screen showing the vault tree and cache controls.
 class HomeScreen extends ConsumerWidget {
-  const HomeScreen({super.key, required this.vault, required this.notes});
+  const HomeScreen({
+    required this.vault,
+    required this.notes,
+    required this.folders,
+    required this.scanProgress,
+    super.key,
+  });
 
   final Vault vault;
   final List<Note> notes;
+  final List<DriveFolder> folders;
+  final ScanProgress scanProgress;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -150,7 +188,51 @@ class HomeScreen extends ConsumerWidget {
         children: <Widget>[
           if (!isOnline) const OfflineBanner(),
           CacheProgress(status: syncStatus),
-          Expanded(child: FolderTreeWidget(notes: notes)),
+          if (scanProgress.status == ScanStatus.syncing &&
+              scanProgress.phase == ScanPhase.fullScan)
+            _FullScanProgress(progress: scanProgress),
+          Expanded(
+            child: FolderTreeWidget(
+              vault: vault,
+              folders: folders,
+              notes: notes,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shows full scan progress in the HomeScreen.
+class _FullScanProgress extends StatelessWidget {
+  const _FullScanProgress({required this.progress});
+
+  final ScanProgress progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final text =
+        '전체 스캔 중 ${progress.syncedFiles}개${progress.currentFolder != null ? ' · ${progress.currentFolder}' : ''}';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        children: <Widget>[
+          const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.outline,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -159,7 +241,7 @@ class HomeScreen extends ConsumerWidget {
 
 /// Wraps [ReaderScreen] to optionally inject a note via GoRouter extra.
 class ReaderScreenWithNote extends ConsumerStatefulWidget {
-  const ReaderScreenWithNote({super.key, this.note});
+  const ReaderScreenWithNote({this.note, super.key});
 
   final Note? note;
 
@@ -208,7 +290,7 @@ class OfflineBanner extends StatelessWidget {
 }
 
 class CacheProgress extends StatelessWidget {
-  const CacheProgress({super.key, required this.status});
+  const CacheProgress({required this.status, super.key});
 
   final CacheSyncStatus status;
 

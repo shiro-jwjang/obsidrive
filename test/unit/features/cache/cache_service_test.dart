@@ -20,9 +20,9 @@ void main() {
     now = DateTime.utc(2026, 4, 13, 10);
   });
 
-  tearDown(() async {
-    if (await directory.exists()) {
-      await directory.delete(recursive: true);
+  tearDown(() {
+    if (directory.existsSync()) {
+      directory.deleteSync(recursive: true);
     }
   });
 

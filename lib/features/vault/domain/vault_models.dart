@@ -4,10 +4,11 @@ import '../../../core/database.dart' show Vault, Note;
 export '../../../core/database.dart' show Vault, Note;
 
 class DriveFolder {
-  const DriveFolder({required this.id, required this.name});
+  const DriveFolder({required this.id, required this.name, this.parentId});
 
   final String id;
   final String name;
+  final String? parentId;
 
   @override
   bool operator ==(Object other) {
@@ -52,33 +53,81 @@ extension NoteX on Note {
   }
 }
 
+/// Phase of the vault scan process.
+enum ScanPhase {
+  /// Loading folder tree and top-level .md files quickly.
+  quickSync,
+
+  /// Full recursive scan for wikilink indexing.
+  fullScan,
+}
+
 class ScanProgress {
   const ScanProgress({
     this.status = ScanStatus.idle,
+    this.phase = ScanPhase.quickSync,
     this.totalFiles = 0,
     this.syncedFiles = 0,
     this.lastError,
+    this.currentFolder,
   });
 
   final ScanStatus status;
+  final ScanPhase phase;
   final int totalFiles;
   final int syncedFiles;
   final String? lastError;
+  final String? currentFolder;
 
   ScanProgress copyWith({
     ScanStatus? status,
+    ScanPhase? phase,
     int? totalFiles,
     int? syncedFiles,
     String? lastError,
+    String? currentFolder,
     bool clearError = false,
   }) {
     return ScanProgress(
       status: status ?? this.status,
+      phase: phase ?? this.phase,
       totalFiles: totalFiles ?? this.totalFiles,
       syncedFiles: syncedFiles ?? this.syncedFiles,
       lastError: clearError ? null : lastError ?? this.lastError,
+      currentFolder: currentFolder ?? this.currentFolder,
     );
   }
 }
 
 enum ScanStatus { idle, syncing, complete, error }
+
+/// Represents a folder node in the lazy-loaded tree.
+class FolderNode {
+  const FolderNode({
+    required this.id,
+    required this.name,
+    required this.driveFolderId,
+    this.children = const [],
+    this.noteCount,
+  });
+
+  final int id;
+  final String name;
+  final String driveFolderId;
+
+  /// Child folder nodes.
+  final List<FolderNode> children;
+
+  /// Number of .md notes in this folder (null if not yet loaded).
+  final int? noteCount;
+
+  FolderNode copyWith({List<FolderNode>? children, int? noteCount}) {
+    return FolderNode(
+      id: id,
+      name: name,
+      driveFolderId: driveFolderId,
+      children: children ?? this.children,
+      noteCount: noteCount ?? this.noteCount,
+    );
+  }
+}

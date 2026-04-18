@@ -14,16 +14,20 @@ class IoFileStorage implements FileStorage {
       File(path).writeAsString(content, flush: true);
 
   @override
+  // ignore: avoid_slow_async_io
   Future<bool> exists(String path) => File(path).exists();
 
   @override
+  // ignore: avoid_slow_async_io
   Future<int> length(String path) => File(path).length();
 
   @override
   Future<String> getCacheDirectory() async {
     final base = await _appDir();
     final dir = Directory('$base/offline_cache');
-    if (!await dir.exists()) await dir.create(recursive: true);
+    if (!dir.existsSync()) {
+      dir.createSync(recursive: true);
+    }
     return dir.path;
   }
 

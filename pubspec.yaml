@@ -10,6 +10,9 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.2
 
   # State management
   flutter_riverpod: ^2.6.1
@@ -29,11 +32,15 @@ dependencies:
   # Markdown
   flutter_markdown: ^0.7.7+1
 
+  # Web (DOM access for HtmlElementView)
+  web: ^1.1.0
+
   # Network
   connectivity_plus: ^6.1.4
 
   # UI
   go_router: ^14.8.1
+  firebase_auth: ^6.4.0
 
 dev_dependencies:
   flutter_test:

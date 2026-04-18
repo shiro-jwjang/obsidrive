@@ -17,12 +17,12 @@ void main() {
   }
 
   test('signIn returns user with auth headers', () async {
-    googleSignIn.interactiveUser = const GoogleSignInUser(
+    googleSignIn.interactiveUser = const GatewayUser(
       id: 'user-1',
       email: 'reader@example.com',
+      accessToken: 'access-token',
       displayName: 'Vault Reader',
       photoUrl: 'https://example.com/avatar.png',
-      accessToken: 'access-token',
       idToken: 'id-token',
     );
 
@@ -67,11 +67,11 @@ void main() {
           .subtract(const Duration(minutes: 1))
           .toIso8601String(),
     });
-    googleSignIn.silentUser = const GoogleSignInUser(
+    googleSignIn.silentUser = const GatewayUser(
       id: 'saved-user',
       email: 'saved@example.com',
-      displayName: 'Saved User',
       accessToken: 'fresh-token',
+      displayName: 'Saved User',
       idToken: 'fresh-id-token',
     );
 
@@ -86,21 +86,21 @@ void main() {
 }
 
 class FakeGoogleSignInClient implements GoogleSignInClient {
-  GoogleSignInUser? interactiveUser;
-  GoogleSignInUser? silentUser;
-  var interactiveSignInCount = 0;
+  GatewayUser? interactiveUser;
+  GatewayUser? silentUser;
+  int interactiveSignInCount = 0;
 
   @override
   final requestedScopes = <String>[AuthRepository.driveScope];
 
   @override
-  Future<GoogleSignInUser?> signIn() async {
+  Future<GatewayUser?> signIn() async {
     interactiveSignInCount += 1;
     return interactiveUser;
   }
 
   @override
-  Future<GoogleSignInUser?> signInSilently() async => silentUser;
+  Future<GatewayUser?> signInSilently() async => silentUser;
 
   @override
   Future<void> signOut() async {}

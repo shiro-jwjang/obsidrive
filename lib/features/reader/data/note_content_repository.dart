@@ -9,6 +9,7 @@ import '../../vault/domain/vault_models.dart';
 
 abstract class DriveFileContentClient {
   Future<String> downloadMarkdown(String fileId);
+  Future<void> uploadMarkdown(String fileId, String content);
 }
 
 class GoogleDriveFileContentClient implements DriveFileContentClient {
@@ -25,6 +26,20 @@ class GoogleDriveFileContentClient implements DriveFileContentClient {
     );
     final media = response as drive.Media;
     return utf8.decodeStream(media.stream);
+  }
+
+  @override
+  Future<void> uploadMarkdown(String fileId, String content) async {
+    final media = drive.Media(
+      Stream.value(utf8.encode(content)),
+      utf8.encode(content).length,
+    );
+    await _api.files.update(
+      drive.File(),
+      fileId,
+      uploadMedia: media,
+      supportsAllDrives: true,
+    );
   }
 }
 
@@ -101,6 +116,16 @@ class NoteContentRepository {
       ),
     );
     return content;
+  }
+
+  Future<void> saveContent(Note note, String content) async {
+    await _driveClient.uploadMarkdown(note.driveFileId, content);
+    await _store.upsertNote(
+      note.copyWith(
+        content: Value(content),
+        cachedAt: Value(_now().toIso8601String()),
+      ),
+    );
   }
 
   Future<Note?> resolveNote(int vaultId, String target) async {

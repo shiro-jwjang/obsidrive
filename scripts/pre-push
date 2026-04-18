@@ -1,0 +1,9 @@
+#!/bin/bash
+# Pre-push hook: run all tests before push
+# Install: cp scripts/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+
+set -e
+
+echo "🧪 Running flutter test..."
+/home/openclaw/flutter/bin/flutter test
+echo "✅ All tests passed. Pushing..."

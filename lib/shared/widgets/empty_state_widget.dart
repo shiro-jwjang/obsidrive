@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 /// A reusable empty-state widget with an icon and message.
 class EmptyStateWidget extends StatelessWidget {
   const EmptyStateWidget({
-    super.key,
     required this.icon,
     required this.message,
+    super.key,
     this.action,
   });
 

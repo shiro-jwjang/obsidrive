@@ -86,7 +86,7 @@ class FakeAuthRepository implements AuthRepository {
   AuthUser? signInUser;
   AuthException? error;
   Duration signInDelay;
-  var signInCount = 0;
+  int signInCount = 0;
 
   @override
   Future<AuthUser> signIn() async {

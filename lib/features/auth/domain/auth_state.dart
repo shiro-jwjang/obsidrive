@@ -77,8 +77,9 @@ class AuthController extends Notifier<AuthState> {
       state = user == null
           ? const AuthState.unauthenticated()
           : AuthState.authenticated(user);
-    } catch (error) {
-      state = AuthState.error(_messageFor(error));
+    } catch (_) {
+      // Stale/expired session — just show login button, no error message
+      state = const AuthState.unauthenticated();
     }
   }
 

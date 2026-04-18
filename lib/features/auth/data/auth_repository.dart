@@ -1,5 +1,9 @@
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+// Conditional imports for platform-specific sign-in
+import 'auth_gateway_stub.dart'
+    if (dart.library.html) 'auth_gateway_web.dart'
+    if (dart.library.io) 'auth_gateway_io.dart';
 
 class AuthRepository {
   AuthRepository({
@@ -11,7 +15,7 @@ class AuthRepository {
        _preferences = preferences,
        _now = now ?? DateTime.now;
 
-  static const driveScope = 'https://www.googleapis.com/auth/drive.readonly';
+  static const driveScope = 'https://www.googleapis.com/auth/drive';
   static const tokenLifetime = Duration(hours: 1);
 
   static const _userIdKey = 'auth.user.id';
@@ -27,12 +31,21 @@ class AuthRepository {
   final DateTime Function() _now;
 
   Future<AuthUser> signIn() async {
-    final googleUser = await _googleSignInClient.signIn();
-    if (googleUser == null) {
+    final gatewayUser = await _googleSignInClient.signIn();
+    if (gatewayUser == null) {
       throw const AuthException('로그인이 취소되었습니다.');
     }
 
-    final user = _toAuthUser(googleUser);
+    final user = AuthUser(
+      id: gatewayUser.id,
+      email: gatewayUser.email,
+      displayName: gatewayUser.displayName,
+      photoUrl: gatewayUser.photoUrl,
+      accessToken: gatewayUser.accessToken,
+      idToken: gatewayUser.idToken,
+      expiresAt: _now().add(tokenLifetime),
+    );
+
     await _saveUser(user);
     return user;
   }
@@ -52,15 +65,28 @@ class AuthRepository {
   }
 
   Future<AuthUser> refreshToken() async {
-    final googleUser = await _googleSignInClient.signInSilently();
-    if (googleUser == null) {
+    try {
+      final gatewayUser = await _googleSignInClient.signInSilently();
+      if (gatewayUser == null) {
+        throw const AuthException('다시 로그인해 주세요.');
+      }
+
+      final user = AuthUser(
+        id: gatewayUser.id,
+        email: gatewayUser.email,
+        displayName: gatewayUser.displayName,
+        photoUrl: gatewayUser.photoUrl,
+        accessToken: gatewayUser.accessToken,
+        idToken: gatewayUser.idToken,
+        expiresAt: _now().add(tokenLifetime),
+      );
+
+      await _saveUser(user);
+      return user;
+    } catch (_) {
       await clearSession();
       throw const AuthException('다시 로그인해 주세요.');
     }
-
-    final user = _toAuthUser(googleUser);
-    await _saveUser(user);
-    return user;
   }
 
   Future<void> signOut() async {
@@ -77,18 +103,6 @@ class AuthRepository {
     await preferences.remove(_accessTokenKey);
     await preferences.remove(_idTokenKey);
     await preferences.remove(_expiresAtKey);
-  }
-
-  AuthUser _toAuthUser(GoogleSignInUser googleUser) {
-    return AuthUser(
-      id: googleUser.id,
-      email: googleUser.email,
-      displayName: googleUser.displayName,
-      photoUrl: googleUser.photoUrl,
-      accessToken: googleUser.accessToken,
-      idToken: googleUser.idToken,
-      expiresAt: _now().add(tokenLifetime),
-    );
   }
 
   AuthUser? _readUser(SharedPreferences preferences) {
@@ -180,8 +194,9 @@ class AuthUser {
   bool isExpired(DateTime now) => !expiresAt.isAfter(now);
 }
 
-class GoogleSignInUser {
-  const GoogleSignInUser({
+/// Gateway user returned by platform-specific auth
+class GatewayUser {
+  const GatewayUser({
     required this.id,
     required this.email,
     required this.accessToken,
@@ -200,80 +215,42 @@ class GoogleSignInUser {
 
 class GoogleSignInClient {
   GoogleSignInClient.googleSignIn()
-    : _googleSignIn = GoogleSignIn(
-        clientId:
-            '487606084766-o8ocai47la9ne3b6he388shb5v4c234q.apps.googleusercontent.com',
-        scopes: const <String>[AuthRepository.driveScope],
-      ),
-      _signIn = null,
+    : _signIn = null,
       _signInSilently = null,
       _signOut = null,
       requestedScopes = const <String>[AuthRepository.driveScope];
 
+  // Keep for backwards compat with tests
   GoogleSignInClient.test({
-    required Future<GoogleSignInUser?> Function() signIn,
-    required Future<GoogleSignInUser?> Function() signInSilently,
+    required Future<GatewayUser?> Function() signIn,
+    required Future<GatewayUser?> Function() signInSilently,
     required Future<void> Function() signOut,
     required this.requestedScopes,
-  }) : _googleSignIn = null,
-       _signIn = signIn,
+  }) : _signIn = signIn,
        _signInSilently = signInSilently,
        _signOut = signOut;
 
-  final GoogleSignIn? _googleSignIn;
-  final Future<GoogleSignInUser?> Function()? _signIn;
-  final Future<GoogleSignInUser?> Function()? _signInSilently;
+  final Future<GatewayUser?> Function()? _signIn;
+  final Future<GatewayUser?> Function()? _signInSilently;
   final Future<void> Function()? _signOut;
   final List<String> requestedScopes;
 
-  Future<GoogleSignInUser?> signIn() async {
+  Future<GatewayUser?> signIn() async {
     final signIn = _signIn;
-    if (signIn != null) {
-      return signIn();
-    }
-
-    final account = await _googleSignIn!.signIn();
-    return _fromAccount(account);
+    if (signIn != null) return signIn();
+    return createAuthGateway().signIn();
   }
 
-  Future<GoogleSignInUser?> signInSilently() async {
+  Future<GatewayUser?> signInSilently() async {
     final signInSilently = _signInSilently;
-    if (signInSilently != null) {
-      return signInSilently();
-    }
-
-    final account = await _googleSignIn!.signInSilently();
-    return _fromAccount(account);
+    if (signInSilently != null) return signInSilently();
+    return createAuthGateway().signInSilently();
   }
 
   Future<void> signOut() async {
     final signOut = _signOut;
-    if (signOut != null) {
-      return signOut();
-    }
-
-    await _googleSignIn!.signOut();
-  }
-
-  Future<GoogleSignInUser?> _fromAccount(GoogleSignInAccount? account) async {
-    if (account == null) {
-      return null;
-    }
-
-    final authentication = await account.authentication;
-    final accessToken = authentication.accessToken;
-    if (accessToken == null) {
-      throw const AuthException('구글 인증 토큰을 가져오지 못했습니다.');
-    }
-
-    return GoogleSignInUser(
-      id: account.id,
-      email: account.email,
-      displayName: account.displayName,
-      photoUrl: account.photoUrl,
-      accessToken: accessToken,
-      idToken: authentication.idToken,
-    );
+    if (signOut != null) return signOut();
+    return createAuthGateway().signOut();
   }
 }
 

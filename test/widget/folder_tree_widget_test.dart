@@ -54,8 +54,17 @@ Widget treeApp(List<Note> notes, {List<Note>? opened}) {
     routes: [
       GoRoute(
         path: '/',
-        builder: (context, state) =>
-            Scaffold(body: FolderTreeWidget(notes: notes)),
+        builder: (context, state) => Scaffold(
+          body: FolderTreeWidget(
+            vault: const Vault(
+              id: 1,
+              name: 'Test Vault',
+              driveFolderId: 'root',
+            ),
+            folders: const <DriveFolder>[],
+            notes: notes,
+          ),
+        ),
       ),
       GoRoute(
         path: '/reader',
@@ -79,9 +88,9 @@ List<Note> sampleNotes() {
 
 Note note({
   required int id,
-  String? driveFileId,
   required String title,
   required String path,
+  String? driveFileId,
 }) {
   return Note(
     id: id,

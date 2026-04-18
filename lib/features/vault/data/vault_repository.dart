@@ -70,16 +70,42 @@ class VaultRepository {
         .get();
   }
 
+  /// List notes whose filePath places them directly inside [folderPath].
+  /// If [folderPath] is empty, returns root-level notes only (no '/' in path).
+  Future<List<Note>> listNotesInFolder(int vaultId, String folderPath) async {
+    final allNotes = await listNotes(vaultId);
+    if (folderPath.isEmpty) {
+      // Root-level notes: no '/' in filePath
+      return allNotes.where((n) => !n.filePath.contains('/')).toList();
+    } else {
+      // Notes directly under folderPath (no deeper nesting)
+      final prefix = '$folderPath/';
+      return allNotes.where((n) {
+        if (!n.filePath.startsWith(prefix)) return false;
+        final rest = n.filePath.substring(prefix.length);
+        return !rest.contains('/');
+      }).toList();
+    }
+  }
+
   Future<Note?> getNote(int id) {
     return (_db.select(
       _db.notes,
     )..where((t) => t.id.equals(id))).getSingleOrNull();
   }
 
+  Future<Note?> getNoteByDriveId(String driveFileId) {
+    return (_db.select(
+      _db.notes,
+    )..where((t) => t.driveFileId.equals(driveFileId))).getSingleOrNull();
+  }
+
   Future<Note> upsertNote(Note note) async {
-    final existing = await getNote(note.id);
+    final existing = await getNoteByDriveId(note.driveFileId);
     if (existing != null) {
-      await (_db.update(_db.notes)..where((t) => t.id.equals(note.id))).write(
+      await (_db.update(
+        _db.notes,
+      )..where((t) => t.id.equals(existing.id))).write(
         NotesCompanion(
           vaultId: Value(note.vaultId),
           title: Value(note.title),
@@ -90,7 +116,21 @@ class VaultRepository {
           updatedAt: Value(note.updatedAt),
         ),
       );
-      return note;
+      return existing.copyWith(
+        vaultId: note.vaultId,
+        title: note.title,
+        filePath: note.filePath,
+        driveFileId: note.driveFileId,
+        content: note.content == null
+            ? const Value.absent()
+            : Value(note.content),
+        cachedAt: note.cachedAt == null
+            ? const Value.absent()
+            : Value(note.cachedAt),
+        updatedAt: note.updatedAt == null
+            ? const Value.absent()
+            : Value(note.updatedAt),
+      );
     }
 
     await _db
@@ -117,6 +157,7 @@ class VaultRepository {
     return (_db.delete(_db.notes)..where((t) => t.id.equals(id))).go();
   }
 
+  /// Bulk insert notes, replacing all existing notes for the vault.
   Future<void> bulkInsertNotes(int vaultId, List<NotesCompanion> notes) async {
     await _db.transaction(() async {
       // Delete existing notes for this vault
@@ -143,6 +184,46 @@ class VaultRepository {
     });
   }
 
+  /// Insert or update individual notes (for lazy loading / incremental sync).
+  /// Does NOT delete existing notes — just upserts by driveFileId.
+  Future<void> upsertNotes(int vaultId, List<NotesCompanion> notes) async {
+    for (final note in notes) {
+      final driveId = note.driveFileId.value;
+      final existing = await (_db.select(
+        _db.notes,
+      )..where((t) => t.driveFileId.equals(driveId))).getSingleOrNull();
+
+      if (existing != null) {
+        await (_db.update(
+          _db.notes,
+        )..where((t) => t.id.equals(existing.id))).write(
+          NotesCompanion(
+            vaultId: Value(vaultId),
+            title: note.title,
+            filePath: note.filePath,
+            driveFileId: note.driveFileId,
+            updatedAt: note.updatedAt,
+          ),
+        );
+      } else {
+        await _db
+            .into(_db.notes)
+            .insert(
+              NotesCompanion.insert(
+                vaultId: Value(vaultId),
+                title: note.title,
+                filePath: note.filePath,
+                driveFileId: note.driveFileId,
+                content: note.content,
+                cachedAt: note.cachedAt,
+                updatedAt: note.updatedAt,
+              ),
+              mode: InsertMode.insertOrReplace,
+            );
+      }
+    }
+  }
+
   Future<int?> getSelectedVaultId() async {
     final row = await (_db.select(
       _db.appSettings,
@@ -156,7 +237,7 @@ class VaultRepository {
         .into(_db.appSettings)
         .insert(
           AppSettingsCompanion(
-            key: Value(_selectedVaultKey),
+            key: const Value(_selectedVaultKey),
             value: Value(vaultId.toString()),
           ),
           mode: InsertMode.insertOrReplace,

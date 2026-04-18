@@ -140,6 +140,7 @@ abstract class CacheMetadataStore {
   Future<CacheSummary> getCacheSummary();
 }
 
+// ignore: one_member_abstracts
 abstract class CacheDriveClient {
   Future<String> downloadMarkdown(String fileId);
 }
@@ -166,6 +167,7 @@ class CacheFileMetadata {
     };
   }
 
+  // ignore: prefer_constructors_over_static_methods
   static CacheFileMetadata fromMap(Map<String, Object?> map) {
     return CacheFileMetadata(
       fileId: map['file_id'] as String,

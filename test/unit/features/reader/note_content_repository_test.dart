@@ -105,4 +105,9 @@ class FakeDriveFileContentClient implements DriveFileContentClient {
     downloadedFileIds.add(fileId);
     return contents[fileId] ?? '';
   }
+
+  @override
+  Future<void> uploadMarkdown(String fileId, String content) async {
+    contents[fileId] = content;
+  }
 }

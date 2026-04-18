@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-// ignore: depend_on_referenced_packages
-import 'package:markdown/markdown.dart' as md;
 
 import '../../../core/markdown_parser.dart';
 import '../../vault/domain/vault_models.dart';
 import '../domain/reader_provider.dart';
-import 'wikilink_span.dart';
+import 'markdown_editor.dart';
+import 'markdown_view.dart';
 
 class ReaderScreen extends ConsumerStatefulWidget {
   const ReaderScreen({super.key});
@@ -18,6 +15,9 @@ class ReaderScreen extends ConsumerStatefulWidget {
 }
 
 class _ReaderScreenState extends ConsumerState<ReaderScreen> {
+  bool _isEditing = false;
+  bool _isSaving = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -28,6 +28,30 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           ref.read(currentNoteProvider.notifier).state = routeNote;
         }
       });
+    }
+  }
+
+  Future<void> _saveContent(Note note, String content) async {
+    setState(() => _isSaving = true);
+    try {
+      await ref.read(noteContentRepositoryProvider).saveContent(note, content);
+      ref.invalidate(noteContentProvider(note));
+      setState(() {
+        _isEditing = false;
+        _isSaving = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('저장했습니다')));
+      }
+    } catch (e) {
+      setState(() => _isSaving = false);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('저장 실패: $e')));
+      }
     }
   }
 
@@ -44,38 +68,69 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final vaultNotes = ref.watch(vaultWikilinksProvider(note.vaultId));
 
     return Scaffold(
-      appBar: AppBar(title: Text(note.title)),
-      body: content.when(
-        data: (markdown) {
-          final notes = vaultNotes.value ?? const <Note>[];
-          final rendered = parseFrontmatter(markdown);
-          if (rendered.trim().isEmpty) {
-            return const Center(child: Text('빈 노트'));
-          }
-
-          return Markdown(
-            data: rendered,
-            selectable: true,
-            extensionSet: md.ExtensionSet.gitHubFlavored,
-            inlineSyntaxes: <md.InlineSyntax>[WikilinkInlineSyntax()],
-            builders: <String, MarkdownElementBuilder>{
-              'wikilink': WikilinkElementBuilder(
-                notes: notes,
-                onOpen: (target) => _openWikilink(context, ref, note, target),
+      appBar: AppBar(
+        title: Text(note.title),
+        actions: [
+          if (_isEditing) ...[
+            if (_isSaving)
+              const Padding(
+                padding: EdgeInsets.only(right: 16),
+                child: Center(
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
               ),
-              'pre': _CodeBlockBuilder(),
-            },
-            paddingBuilders: const <String, MarkdownPaddingBuilder>{},
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text('노트를 불러오지 못했습니다.\n$error'),
-          ),
-        ),
+          ] else ...[
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: '편집',
+              onPressed: content.hasValue && content.value != null
+                  ? () {
+                      setState(() => _isEditing = true);
+                    }
+                  : null,
+            ),
+          ],
+        ],
       ),
+      body: _isEditing
+          ? content.when(
+              data: (markdown) => buildMarkdownEditor(
+                initialContent: markdown,
+                onSaved: (newContent) => _saveContent(note, newContent),
+                onCancelled: () {
+                  setState(() => _isEditing = false);
+                },
+              ),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(child: Text('오류: $e')),
+            )
+          : content.when(
+              data: (markdown) {
+                final notes = vaultNotes.value ?? const <Note>[];
+                final rendered = parseFrontmatter(markdown);
+                if (rendered.trim().isEmpty) {
+                  return const Center(child: Text('빈 노트'));
+                }
+
+                return buildMarkdownView(
+                  markdown: rendered,
+                  notes: notes,
+                  onWikilinkTap: (target) =>
+                      _openWikilink(context, ref, note, target),
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, stackTrace) => Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text('노트를 불러오지 못했습니다.\n$error'),
+                ),
+              ),
+            ),
     );
   }
 
@@ -97,77 +152,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       return;
     }
 
+    // Just update state — no route push, so DOM div is reused
     ref.read(currentNoteProvider.notifier).state = target;
-    context.go('/reader', extra: target);
-  }
-}
-
-class WikilinkInlineSyntax extends md.InlineSyntax {
-  WikilinkInlineSyntax() : super(r'\[\[([^\]\r\n]+)\]\]', startCharacter: 91);
-
-  @override
-  bool onMatch(md.InlineParser parser, Match match) {
-    final link = parseWikilinks(match.group(0)!).single;
-    final element = md.Element.text('wikilink', link.displayText)
-      ..attributes['target'] = link.target
-      ..attributes['display'] = link.displayText;
-    parser.addNode(element);
-    return true;
-  }
-}
-
-class WikilinkElementBuilder extends MarkdownElementBuilder {
-  WikilinkElementBuilder({required this.notes, required this.onOpen});
-
-  final List<Note> notes;
-  final void Function(String target) onOpen;
-
-  @override
-  Widget? visitElementAfterWithContext(
-    BuildContext context,
-    md.Element element,
-    TextStyle? preferredStyle,
-    TextStyle? parentStyle,
-  ) {
-    final target = element.attributes['target'] ?? element.textContent;
-    final display = element.attributes['display'] ?? element.textContent;
-    final link = parseWikilinks('[[$target]]').single;
-    final exists = resolveInVault(link, notes) != null;
-
-    return WikilinkSpan(
-      text: display,
-      exists: exists,
-      onTap: () => onOpen(target),
-    );
-  }
-}
-
-class _CodeBlockBuilder extends MarkdownElementBuilder {
-  @override
-  bool isBlockElement() => true;
-
-  @override
-  Widget? visitElementAfterWithContext(
-    BuildContext context,
-    md.Element element,
-    TextStyle? preferredStyle,
-    TextStyle? parentStyle,
-  ) {
-    final theme = Theme.of(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: SelectableText(
-        element.textContent,
-        style: theme.textTheme.bodyMedium?.copyWith(
-          fontFamily: 'monospace',
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      ),
-    );
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -72,6 +74,15 @@ class _VaultPickerScreenState extends ConsumerState<VaultPickerScreen> {
                       leading: const Icon(Icons.folder_outlined),
                       title: Text(folder.name),
                       selected: selected,
+                      selectedTileColor: Theme.of(
+                        context,
+                      ).colorScheme.secondaryContainer.withValues(alpha: 0.3),
+                      selectedColor: Theme.of(
+                        context,
+                      ).colorScheme.onSecondaryContainer,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       onTap: () {
                         setState(() {
                           _selectedFolder = folder;
@@ -129,15 +140,30 @@ class _VaultPickerScreenState extends ConsumerState<VaultPickerScreen> {
   }
 
   Future<void> _selectVault(DriveFolder folder) async {
-    final vault = await ref.read(vaultScannerProvider).scanAndSyncVault(folder);
+    final scanner = ref.read(vaultScannerProvider);
+
+    // Phase 1: Quick sync — folder tree + root .md files
+    final vault = await scanner.quickSync(folder);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('폴더 구조를 불러왔습니다. 전체 스캔은 백그라운드에서 진행됩니다.')),
+      );
+    }
+
+    // Phase 2: Background full scan (fire and forget)
+    unawaited(
+      scanner.backgroundFullScan(
+        vaultId: vault.id,
+        rootFolderId: folder.id,
+        vaultName: folder.name,
+      ),
+    );
+
+    // Optional: trigger offline cache sync for already loaded notes
     if (ref.read(isOnlineProvider)) {
       final notes = await ref.read(vaultRepositoryProvider).listNotes(vault.id);
-      await ref.read(cacheSyncControllerProvider).syncVault(notes);
-    }
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('볼트 스캔이 완료되었습니다.')));
+      unawaited(ref.read(cacheSyncControllerProvider).syncVault(notes));
     }
   }
 }
@@ -178,10 +204,14 @@ class _ScanProgressView extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final phaseLabel = progress.phase == ScanPhase.quickSync
+        ? '빠른 동기화'
+        : '전체 스캔';
+
     final text = switch (progress.status) {
       ScanStatus.syncing =>
-        '스캔 중 ${progress.syncedFiles}/${progress.totalFiles}',
-      ScanStatus.complete => '스캔 완료 ${progress.syncedFiles}개',
+        '$phaseLabel ${progress.syncedFiles}개${progress.currentFolder != null ? ' · ${progress.currentFolder}' : ''}',
+      ScanStatus.complete => '$phaseLabel 완료 ${progress.syncedFiles}개',
       ScanStatus.error => progress.lastError ?? '스캔 중 오류가 발생했습니다.',
       ScanStatus.idle => '',
     };

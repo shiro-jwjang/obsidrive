@@ -4,6 +4,7 @@ import 'package:googleapis/drive/v3.dart' as drive;
 import '../../../core/database.dart';
 import '../domain/vault_models.dart';
 
+// ignore: one_member_abstracts
 abstract class DriveFilesClient {
   Future<drive.FileList> list({
     required String q,
@@ -60,6 +61,7 @@ class DriveFolderService {
   final DriveFilesClient _filesClient;
   final int pageSize;
 
+  /// List immediate child folders of [parentFolderId].
   Future<List<DriveFolder>> listFolders(String parentFolderId) async {
     final folders = <DriveFolder>[];
     var pageToken = null as String?;
@@ -76,7 +78,13 @@ class DriveFolderService {
         (response.files ?? const <drive.File>[])
             .where(_isFolder)
             .where((file) => file.id != null && file.name != null)
-            .map((file) => DriveFolder(id: file.id!, name: file.name!)),
+            .map(
+              (file) => DriveFolder(
+                id: file.id!,
+                name: file.name!,
+                parentId: parentFolderId,
+              ),
+            ),
       );
       pageToken = response.nextPageToken;
     } while (pageToken != null);
@@ -84,9 +92,80 @@ class DriveFolderService {
     return folders;
   }
 
+  /// Recursively list all folders under [rootFolderId].
+  /// Returns a flat list of all folders with parentId set.
+  Future<List<DriveFolder>> listAllFoldersRecursive(String rootFolderId) async {
+    final allFolders = <DriveFolder>[];
+    await _collectFoldersRecursive(
+      parentFolderId: rootFolderId,
+      allFolders: allFolders,
+    );
+    return allFolders;
+  }
+
+  Future<void> _collectFoldersRecursive({
+    required String parentFolderId,
+    required List<DriveFolder> allFolders,
+  }) async {
+    final children = await listFolders(parentFolderId);
+    allFolders.addAll(children);
+    for (final child in children) {
+      if (child.name == '.obsidian') continue;
+      await _collectFoldersRecursive(
+        parentFolderId: child.id,
+        allFolders: allFolders,
+      );
+    }
+  }
+
+  /// List .md files in a specific folder (non-recursive, single API call).
+  Future<List<NotesCompanion>> listFilesInFolder({
+    required int vaultId,
+    required String folderId,
+    required String pathPrefix,
+  }) async {
+    final notes = <NotesCompanion>[];
+    var pageToken = null as String?;
+
+    do {
+      final response = await _filesClient.list(
+        q: _filesQuery(folderId),
+        pageSize: pageSize,
+        pageToken: pageToken,
+        fields: 'nextPageToken, files(id, name, mimeType, modifiedTime)',
+      );
+
+      for (final file in response.files ?? const <drive.File>[]) {
+        final name = file.name;
+        final id = file.id;
+        if (name == null || id == null) continue;
+        if (!_isMarkdownFile(name)) continue;
+
+        notes.add(
+          NotesCompanion.insert(
+            vaultId: Value(vaultId),
+            title: Value(_titleFromName(name)),
+            filePath: Value('$pathPrefix$name'),
+            driveFileId: Value(id),
+            updatedAt: Value(file.modifiedTime?.toIso8601String()),
+          ),
+        );
+      }
+
+      pageToken = response.nextPageToken;
+    } while (pageToken != null);
+
+    return notes;
+  }
+
+  /// Scans a vault folder recursively and returns all markdown notes.
+  ///
+  /// [onProgress] is called after each folder is processed with the current
+  /// count of notes found and the folder path being scanned.
   Future<List<NotesCompanion>> scanVault({
     required int vaultId,
     required String rootFolderId,
+    void Function(int notesFound, String currentFolder)? onProgress,
   }) async {
     final notes = <NotesCompanion>[];
     await _scanFolder(
@@ -94,6 +173,7 @@ class DriveFolderService {
       vaultId: vaultId,
       folderId: rootFolderId,
       pathPrefix: '',
+      onProgress: onProgress,
     );
     return notes;
   }
@@ -103,6 +183,7 @@ class DriveFolderService {
     required int vaultId,
     required String folderId,
     required String pathPrefix,
+    void Function(int notesFound, String currentFolder)? onProgress,
   }) async {
     var pageToken = null as String?;
 
@@ -131,6 +212,7 @@ class DriveFolderService {
             vaultId: vaultId,
             folderId: id,
             pathPrefix: '$pathPrefix$name/',
+            onProgress: onProgress,
           );
           continue;
         }
@@ -152,6 +234,8 @@ class DriveFolderService {
 
       pageToken = response.nextPageToken;
     } while (pageToken != null);
+
+    onProgress?.call(notes.length, pathPrefix);
   }
 
   static bool _isFolder(drive.File file) => file.mimeType == folderMimeType;
@@ -168,6 +252,16 @@ class DriveFolderService {
     return [
       "'${_escape(parentFolderId)}' in parents",
       "mimeType = '$folderMimeType'",
+      'trashed = false',
+    ].join(' and ');
+  }
+
+  /// Query for .md files only (no folders) in a specific parent.
+  static String _filesQuery(String parentFolderId) {
+    return [
+      "'${_escape(parentFolderId)}' in parents",
+      "mimeType != '$folderMimeType'",
+      "name contains '.md'",
       'trashed = false',
     ].join(' and ');
   }

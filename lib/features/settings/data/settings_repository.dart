@@ -44,7 +44,7 @@ class ThemeModeController extends Notifier<ThemeMode> {
   @override
   ThemeMode build() {
     // Kick off an async load; when it completes it will update state.
-    Future.microtask(() => _load());
+    Future<void>.microtask(_load);
     return ThemeMode.system;
   }
 

@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 class WikilinkSpan extends StatelessWidget {
   const WikilinkSpan({
-    super.key,
     required this.text,
     required this.exists,
     required this.onTap,
+    super.key,
   });
 
   final String text;
@@ -17,14 +17,16 @@ class WikilinkSpan extends StatelessWidget {
     final theme = Theme.of(context);
     final color = exists ? theme.colorScheme.primary : theme.disabledColor;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Text(
-        text,
-        style: theme.textTheme.bodyMedium?.copyWith(
-          color: color,
-          decoration: exists ? TextDecoration.underline : TextDecoration.none,
-          decorationColor: color,
+    return SelectionContainer.disabled(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Text(
+          text,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: color,
+            decoration: exists ? TextDecoration.underline : TextDecoration.none,
+            decorationColor: color,
+          ),
         ),
       ),
     );
