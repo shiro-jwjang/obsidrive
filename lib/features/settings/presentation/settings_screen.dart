@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../auth/domain/auth_state.dart';
 import '../../cache/domain/cache_provider.dart';
@@ -16,7 +17,13 @@ class SettingsScreen extends ConsumerWidget {
     final cacheSummary = ref.watch(cacheSummaryProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('설정')),
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/home'),
+        ),
+        title: const Text('설정'),
+      ),
       body: ListView(
         children: <Widget>[
           Padding(
