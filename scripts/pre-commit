@@ -1,5 +1,5 @@
 #!/bin/bash
-# Pre-commit hook: format check + analyze
+# Pre-commit hook: format check + analyze + Firebase SDK guard
 # Install: cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 
 set -e
@@ -11,6 +11,31 @@ echo "✅ Format OK"
 echo "🔍 Running flutter analyze..."
 /home/openclaw/flutter/bin/flutter analyze --no-fatal-infos --no-fatal-warnings 2>&1
 echo "✅ Analyze OK"
+
+# Firebase SDK guard — accepts both inline and external config
+echo "🔍 Checking Firebase config..."
+python3 -c "
+import os, re
+
+with open('web/index.html') as f: html = f.read()
+
+# Must have Firebase SDK loaded
+assert 'firebase-app' in html or 'firebase-config.js' in html, 'No Firebase SDK in index.html'
+
+# External config mode (firebase-config.js)
+if 'firebase-config.js' in html:
+    assert os.path.exists('web/firebase-config.js'), 'firebase-config.js referenced but missing'
+    with open('web/firebase-config.js') as f: js = f.read()
+    assert 'AIzaSy' in js, 'API key missing from firebase-config.js'
+    assert 'firebase.initializeApp' in js, 'initializeApp missing'
+    assert 'AIzaSy' not in html, 'API key should be in firebase-config.js, not index.html'
+# Inline config mode
+elif 'firebase.initializeApp' in html:
+    assert 'AIzaSy' in html, 'Inline Firebase config missing API key'
+    assert len(re.findall(r'AIzaSy[a-zA-Z0-9_-]{32}', html)) == 1, 'API key format invalid'
+
+print('✅ Firebase config OK')
+"
 
 echo ""
 echo "All checks passed. Committing..."
