@@ -107,11 +107,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         leading: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(
-              icon: const Icon(Icons.arrow_upward),
-              tooltip: '상위 폴더',
-              onPressed: () => context.go('/home'),
-            ),
             Consumer(
               builder: (context, ref, _) {
                 final history = ref.watch(noteHistoryProvider);
@@ -130,6 +125,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                       : null,
                 );
               },
+            ),
+            IconButton(
+              icon: const Icon(Icons.arrow_upward),
+              tooltip: '상위 폴더',
+              onPressed: () => context.go('/home'),
             ),
           ],
         ),
