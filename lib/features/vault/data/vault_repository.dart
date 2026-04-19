@@ -1,11 +1,15 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 
 import '../../../core/database.dart';
+import '../domain/vault_models.dart' show DriveFolder;
 
 class VaultRepository {
   VaultRepository(this._db);
 
   static const _selectedVaultKey = 'selected_vault_id';
+  static String _foldersKey(int vaultId) => 'vault_${vaultId}_folders';
 
   final AppDatabase _db;
 
@@ -200,6 +204,61 @@ class VaultRepository {
 
   Future<void> deleteNote(int id) {
     return (_db.delete(_db.notes)..where((t) => t.id.equals(id))).go();
+  }
+
+  Future<void> deleteNotesByIds(List<int> ids) async {
+    if (ids.isEmpty) return;
+    await (_db.delete(_db.notes)..where((t) => t.id.isIn(ids))).go();
+  }
+
+  Future<List<DriveFolder>> listFolders(int vaultId) async {
+    final row = await (_db.select(
+      _db.appSettings,
+    )..where((t) => t.key.equals(_foldersKey(vaultId)))).getSingleOrNull();
+    final value = row?.value;
+    if (value == null || value.isEmpty) {
+      return const <DriveFolder>[];
+    }
+
+    final decoded = jsonDecode(value);
+    if (decoded is! List) {
+      return const <DriveFolder>[];
+    }
+
+    return decoded
+        .whereType<Map<String, Object?>>()
+        .map(
+          (folder) => DriveFolder(
+            id: folder['id'] as String,
+            name: folder['name'] as String,
+            parentId: folder['parentId'] as String?,
+          ),
+        )
+        .toList();
+  }
+
+  Future<void> cacheFolders(int vaultId, List<DriveFolder> folders) {
+    final encoded = jsonEncode(
+      folders
+          .map(
+            (folder) => <String, Object?>{
+              'id': folder.id,
+              'name': folder.name,
+              'parentId': folder.parentId,
+            },
+          )
+          .toList(),
+    );
+
+    return _db
+        .into(_db.appSettings)
+        .insert(
+          AppSettingsCompanion(
+            key: Value(_foldersKey(vaultId)),
+            value: Value(encoded),
+          ),
+          mode: InsertMode.insertOrReplace,
+        );
   }
 
   /// Bulk insert notes, replacing all existing notes for the vault.

@@ -217,7 +217,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               onPressed: isOnline && syncStatus.status != CacheSyncPhase.syncing
                   ? () => ref
                         .read(cacheSyncControllerProvider)
-                        .syncVault(widget.notes)
+                        .checkForUpdates(widget.notes)
                   : null,
               icon: const Icon(Icons.sync),
             ),

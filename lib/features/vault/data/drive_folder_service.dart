@@ -158,6 +158,117 @@ class DriveFolderService {
     return notes;
   }
 
+  /// Fetch only markdown files modified after [since].
+  ///
+  /// Drive queries are scoped to direct children, so this still walks folders
+  /// recursively while only returning files whose modifiedTime changed.
+  Future<List<NotesCompanion>> listChangedFiles({
+    required int vaultId,
+    required String rootFolderId,
+    required DateTime since,
+  }) async {
+    final notes = <NotesCompanion>[];
+    await _collectChangedFilesRecursive(
+      notes: notes,
+      vaultId: vaultId,
+      folderId: rootFolderId,
+      pathPrefix: '',
+      since: since,
+    );
+    return notes;
+  }
+
+  Future<void> _collectChangedFilesRecursive({
+    required List<NotesCompanion> notes,
+    required int vaultId,
+    required String folderId,
+    required String pathPrefix,
+    required DateTime since,
+  }) async {
+    var pageToken = null as String?;
+
+    do {
+      final response = await _filesClient.list(
+        q: _changedFilesQuery(folderId, since),
+        pageSize: pageSize,
+        pageToken: pageToken,
+        fields: 'nextPageToken, files(id, name, mimeType, modifiedTime)',
+      );
+
+      for (final file in response.files ?? const <drive.File>[]) {
+        final name = file.name;
+        final id = file.id;
+        if (name == null || id == null) continue;
+
+        if (_isFolder(file)) {
+          if (name == '.obsidian') continue;
+          await _collectChangedFilesRecursive(
+            notes: notes,
+            vaultId: vaultId,
+            folderId: id,
+            pathPrefix: '$pathPrefix$name/',
+            since: since,
+          );
+          continue;
+        }
+
+        if (!_isMarkdownFile(name)) continue;
+        notes.add(
+          NotesCompanion.insert(
+            vaultId: Value(vaultId),
+            title: Value(_titleFromName(name)),
+            filePath: Value('$pathPrefix$name'),
+            driveFileId: Value(id),
+            updatedAt: Value(file.modifiedTime?.toIso8601String()),
+          ),
+        );
+      }
+
+      pageToken = response.nextPageToken;
+    } while (pageToken != null);
+  }
+
+  /// Recursively fetch current Drive IDs for markdown files in the vault.
+  Future<Set<String>> getAllFileIds(String rootFolderId) async {
+    final ids = <String>{};
+    await _collectFileIdsRecursive(folderId: rootFolderId, fileIds: ids);
+    return ids;
+  }
+
+  Future<void> _collectFileIdsRecursive({
+    required String folderId,
+    required Set<String> fileIds,
+  }) async {
+    var pageToken = null as String?;
+
+    do {
+      final response = await _filesClient.list(
+        q: _scanQuery(folderId),
+        pageSize: pageSize,
+        pageToken: pageToken,
+        fields: 'nextPageToken, files(id, name, mimeType)',
+      );
+
+      for (final file in response.files ?? const <drive.File>[]) {
+        final name = file.name;
+        final id = file.id;
+        if (name == null || id == null) continue;
+
+        if (_isFolder(file)) {
+          if (name == '.obsidian') continue;
+          await _collectFileIdsRecursive(folderId: id, fileIds: fileIds);
+          continue;
+        }
+
+        if (_isMarkdownFile(name)) {
+          fileIds.add(id);
+        }
+      }
+
+      pageToken = response.nextPageToken;
+    } while (pageToken != null);
+  }
+
   /// Scans a vault folder recursively and returns all markdown notes.
   ///
   /// [onProgress] is called after each folder is processed with the current
@@ -272,6 +383,18 @@ class DriveFolderService {
       "(mimeType = '$folderMimeType' or name contains '.md')",
       'trashed = false',
     ].join(' and ');
+  }
+
+  static String _changedFilesQuery(String parentFolderId, DateTime since) {
+    return [
+      "'${_escape(parentFolderId)}' in parents",
+      "(mimeType = '$folderMimeType' or (name contains '.md' and modifiedTime > '${_formatDriveTimestamp(since)}'))",
+      'trashed = false',
+    ].join(' and ');
+  }
+
+  static String _formatDriveTimestamp(DateTime value) {
+    return value.toUtc().toIso8601String();
   }
 
   static String _escape(String value) => value.replaceAll("'", r"\'");

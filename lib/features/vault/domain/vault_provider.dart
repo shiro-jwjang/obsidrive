@@ -124,8 +124,18 @@ final folderTreeProvider = FutureProvider<List<DriveFolder>>((ref) async {
     return const <DriveFolder>[];
   }
 
+  final repo = ref.watch(vaultRepositoryProvider);
+  final cachedFolders = await repo.listFolders(vault.id);
+  if (cachedFolders.isNotEmpty) {
+    return cachedFolders;
+  }
+
   final service = ref.watch(driveFolderServiceProvider);
-  return service.listAllFoldersRecursive(vault.driveFolderId);
+  final folders = await service.listAllFoldersRecursive(vault.driveFolderId);
+  if (folders.isNotEmpty) {
+    await repo.cacheFolders(vault.id, folders);
+  }
+  return folders;
 });
 
 /// Family provider that lazy-loads .md files for a specific folder.
@@ -314,6 +324,67 @@ class VaultScanner {
     );
 
     try {
+      final vault = await _repository.getVault(vaultId);
+      final lastSyncedAt = vault?.lastSyncedAtDateTime;
+
+      if (lastSyncedAt != null) {
+        _onProgress(
+          const ScanProgress(
+            status: ScanStatus.syncing,
+            phase: ScanPhase.fullScan,
+            currentFolder: '변경된 파일 확인 중...',
+          ),
+        );
+
+        final changedNotes = await _driveFolderService.listChangedFiles(
+          vaultId: vaultId,
+          rootFolderId: rootFolderId,
+          since: lastSyncedAt,
+        );
+
+        if (changedNotes.isNotEmpty) {
+          await _repository.upsertNotes(vaultId, changedNotes);
+        }
+
+        _onProgress(
+          ScanProgress(
+            status: ScanStatus.syncing,
+            phase: ScanPhase.fullScan,
+            totalFiles: changedNotes.length,
+            syncedFiles: changedNotes.length,
+            currentFolder: '삭제된 파일 확인 중...',
+          ),
+        );
+
+        final currentDriveIds = await _driveFolderService.getAllFileIds(
+          rootFolderId,
+        );
+        final localNotes = await _repository.listNotes(vaultId);
+        final deletedIds = localNotes
+            .where((note) => !currentDriveIds.contains(note.driveFileId))
+            .map((note) => note.id)
+            .toList();
+
+        if (deletedIds.isNotEmpty) {
+          await _repository.deleteNotesByIds(deletedIds);
+        }
+
+        await _markVaultSynced(vaultId);
+        _invalidateFolderNotes(rootFolderId);
+
+        _onProgress(
+          ScanProgress(
+            status: ScanStatus.complete,
+            phase: ScanPhase.fullScan,
+            totalFiles: changedNotes.length,
+            syncedFiles: changedNotes.length,
+          ),
+        );
+
+        _invalidateVaults();
+        return;
+      }
+
       final notes = await _driveFolderService.scanVault(
         vaultId: vaultId,
         rootFolderId: rootFolderId,
@@ -342,13 +413,7 @@ class VaultScanner {
 
       await _repository.bulkInsertNotes(vaultId, notes);
       _invalidateFolderNotes(rootFolderId);
-
-      final vault = await _repository.getVault(vaultId);
-      if (vault != null) {
-        await _repository.upsertVault(
-          vault.copyWithDateTime(lastSyncedAt: DateTime.now()),
-        );
-      }
+      await _markVaultSynced(vaultId);
 
       _onProgress(
         ScanProgress(
@@ -370,6 +435,14 @@ class VaultScanner {
       );
       // Don't rethrow — this is a background task
     }
+  }
+
+  Future<void> _markVaultSynced(int vaultId) async {
+    final vault = await _repository.getVault(vaultId);
+    if (vault == null) return;
+    await _repository.upsertVault(
+      vault.copyWithDateTime(lastSyncedAt: DateTime.now()),
+    );
   }
 
   /// Legacy method: full scan and sync (kept for backward compatibility).
