@@ -103,9 +103,35 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/home'),
+        leadingWidth: 96,
+        leading: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.arrow_upward),
+              tooltip: '상위 폴더',
+              onPressed: () => context.go('/home'),
+            ),
+            Consumer(
+              builder: (context, ref, _) {
+                final history = ref.watch(noteHistoryProvider);
+                return IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: '이전 노트',
+                  onPressed: history.isNotEmpty
+                      ? () {
+                          final previous = history.last;
+                          ref
+                              .read(noteHistoryProvider.notifier)
+                              .update((list) => [...list]..removeLast());
+                          ref.read(currentNoteProvider.notifier).state =
+                              previous;
+                        }
+                      : null,
+                );
+              },
+            ),
+          ],
         ),
         title: _isEditing ? _buildTitleField(context) : Text(note.title),
         actions: [
@@ -261,7 +287,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       return;
     }
 
-    // Just update state — no route push, so DOM div is reused
+    ref
+        .read(noteHistoryProvider.notifier)
+        .update((list) => [...list, sourceNote]);
     ref.read(currentNoteProvider.notifier).state = target;
   }
 }

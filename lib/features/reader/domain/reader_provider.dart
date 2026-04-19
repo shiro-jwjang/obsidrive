@@ -14,6 +14,11 @@ final currentNoteProvider = StateProvider<Note?>((ref) {
   return null;
 });
 
+/// Tracks navigation history for the Back button.
+/// Each time a note is opened from another note, push the previous note here.
+/// Popping goes back to the previous note.
+final noteHistoryProvider = StateProvider<List<Note>>((ref) => []);
+
 final driveFileContentClientProvider = Provider<DriveFileContentClient>((ref) {
   final authState = ref.watch(authControllerProvider);
   final user = authState.user;
