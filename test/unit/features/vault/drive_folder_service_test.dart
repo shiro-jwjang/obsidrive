@@ -124,6 +124,43 @@ void main() {
       expect(client.requests, hasLength(2));
       expect(client.requests.last.q, contains("'notes' in parents"));
     });
+
+    test(
+      'getAllFiles returns markdown metadata with recursive paths',
+      () async {
+        final modified = DateTime.utc(2026, 1, 2, 3, 4, 5);
+        final client = FakeDriveFilesClient()
+          ..queueResponse(
+            drive.FileList(
+              files: <drive.File>[
+                folder('folder-notes', 'Notes'),
+                markdown('root-note', 'Root.md', modifiedTime: modified),
+                drive.File(
+                  id: 'image',
+                  name: 'photo.png',
+                  mimeType: 'image/png',
+                ),
+              ],
+            ),
+          )
+          ..queueResponse(
+            drive.FileList(
+              files: <drive.File>[markdown('nested', 'Nested.md')],
+            ),
+          );
+        final service = DriveFolderService(client);
+
+        final files = await service.getAllFiles('root');
+
+        expect(files.map((file) => file.id), <String>['nested', 'root-note']);
+        expect(files.map((file) => file.path), <String>[
+          'Notes/Nested.md',
+          'Root.md',
+        ]);
+        expect(files.last.modifiedTime, modified.toIso8601String());
+        expect(client.requests.first.fields, contains('modifiedTime'));
+      },
+    );
   });
 }
 
@@ -135,8 +172,13 @@ drive.File folder(String id, String name) {
   );
 }
 
-drive.File markdown(String id, String name) {
-  return drive.File(id: id, name: name, mimeType: 'text/markdown');
+drive.File markdown(String id, String name, {DateTime? modifiedTime}) {
+  return drive.File(
+    id: id,
+    name: name,
+    mimeType: 'text/markdown',
+    modifiedTime: modifiedTime,
+  );
 }
 
 class FakeDriveFilesClient implements DriveFilesClient {

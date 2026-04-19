@@ -356,17 +356,27 @@ class VaultScanner {
           ),
         );
 
-        final currentDriveIds = await _driveFolderService.getAllFileIds(
+        final allDriveFiles = await _driveFolderService.getAllFiles(
           rootFolderId,
         );
-        final localNotes = await _repository.listNotes(vaultId);
-        final deletedIds = localNotes
-            .where((note) => !currentDriveIds.contains(note.driveFileId))
-            .map((note) => note.id)
-            .toList();
+        final driveFileMap = {for (final file in allDriveFiles) file.id: file};
+        final localIds = await _repository.listDriveFileIds(vaultId);
 
+        final missingIds = driveFileMap.keys
+            .where((id) => !localIds.contains(id))
+            .toList();
+        if (missingIds.isNotEmpty) {
+          final missingNotes = missingIds
+              .map((id) => driveFileMap[id]!.toNoteCompanion(vaultId: vaultId))
+              .toList();
+          await _repository.upsertNotes(vaultId, missingNotes);
+        }
+
+        final deletedIds = localIds
+            .where((id) => !driveFileMap.containsKey(id))
+            .toList();
         if (deletedIds.isNotEmpty) {
-          await _repository.deleteNotesByIds(deletedIds);
+          await _repository.deleteNotesByDriveIds(deletedIds);
         }
 
         await _markVaultSynced(vaultId);

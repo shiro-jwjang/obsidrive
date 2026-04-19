@@ -59,6 +59,49 @@ void main() {
 
     expect(results, hasLength(50));
   });
+
+  test('listDriveFileIds returns IDs for one vault only', () async {
+    await _insertNote(
+      db,
+      vaultId: 1,
+      title: 'One',
+      content: '',
+      driveFileId: 'drive-one',
+    );
+    await _insertNote(
+      db,
+      vaultId: 2,
+      title: 'Two',
+      content: '',
+      driveFileId: 'drive-two',
+    );
+
+    final ids = await repository.listDriveFileIds(1);
+
+    expect(ids, <String>{'drive-one'});
+  });
+
+  test('deleteNotesByDriveIds removes matching notes', () async {
+    await _insertNote(
+      db,
+      vaultId: 1,
+      title: 'Deleted',
+      content: '',
+      driveFileId: 'deleted-id',
+    );
+    await _insertNote(
+      db,
+      vaultId: 1,
+      title: 'Kept',
+      content: '',
+      driveFileId: 'kept-id',
+    );
+
+    await repository.deleteNotesByDriveIds(<String>['deleted-id']);
+
+    final remaining = await repository.listNotes(1);
+    expect(remaining.map((note) => note.driveFileId), <String>['kept-id']);
+  });
 }
 
 Future<void> _insertNote(
@@ -66,6 +109,7 @@ Future<void> _insertNote(
   required int vaultId,
   required String title,
   required String content,
+  String? driveFileId,
 }) {
   return db
       .into(db.notes)
@@ -74,7 +118,7 @@ Future<void> _insertNote(
           vaultId: Value(vaultId),
           title: Value(title),
           filePath: Value('$title.md'),
-          driveFileId: Value('drive-$vaultId-$title'),
+          driveFileId: Value(driveFileId ?? 'drive-$vaultId-$title'),
           content: Value(content),
         ),
       );

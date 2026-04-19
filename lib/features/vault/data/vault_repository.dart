@@ -211,6 +211,21 @@ class VaultRepository {
     await (_db.delete(_db.notes)..where((t) => t.id.isIn(ids))).go();
   }
 
+  /// Get all Drive file IDs currently stored for this vault.
+  Future<Set<String>> listDriveFileIds(int vaultId) async {
+    final rows = await (_db.select(
+      _db.notes,
+    )..where((t) => t.vaultId.equals(vaultId))).get();
+    return rows.map((row) => row.driveFileId).toSet();
+  }
+
+  Future<void> deleteNotesByDriveIds(List<String> driveIds) async {
+    if (driveIds.isEmpty) return;
+    await (_db.delete(
+      _db.notes,
+    )..where((t) => t.driveFileId.isIn(driveIds))).go();
+  }
+
   Future<List<DriveFolder>> listFolders(int vaultId) async {
     final row = await (_db.select(
       _db.appSettings,

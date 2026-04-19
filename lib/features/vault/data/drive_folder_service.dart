@@ -28,6 +28,30 @@ class DriveFilesListRequest {
   final String? fields;
 }
 
+class DriveFileInfo {
+  const DriveFileInfo({
+    required this.id,
+    required this.name,
+    required this.path,
+    this.modifiedTime,
+  });
+
+  final String id;
+  final String name;
+  final String path;
+  final String? modifiedTime;
+
+  NotesCompanion toNoteCompanion({required int vaultId}) {
+    return NotesCompanion.insert(
+      vaultId: Value(vaultId),
+      title: Value(DriveFolderService._titleFromName(name)),
+      filePath: Value(path),
+      driveFileId: Value(id),
+      updatedAt: Value(modifiedTime),
+    );
+  }
+}
+
 class GoogleDriveFilesClient implements DriveFilesClient {
   GoogleDriveFilesClient(drive.DriveApi api) : _api = api;
 
@@ -228,16 +252,21 @@ class DriveFolderService {
     } while (pageToken != null);
   }
 
-  /// Recursively fetch current Drive IDs for markdown files in the vault.
-  Future<Set<String>> getAllFileIds(String rootFolderId) async {
-    final ids = <String>{};
-    await _collectFileIdsRecursive(folderId: rootFolderId, fileIds: ids);
-    return ids;
+  /// Recursively fetch current Drive markdown files in the vault.
+  Future<List<DriveFileInfo>> getAllFiles(String rootFolderId) async {
+    final files = <DriveFileInfo>[];
+    await _collectAllFilesRecursive(
+      folderId: rootFolderId,
+      pathPrefix: '',
+      files: files,
+    );
+    return files;
   }
 
-  Future<void> _collectFileIdsRecursive({
+  Future<void> _collectAllFilesRecursive({
     required String folderId,
-    required Set<String> fileIds,
+    required String pathPrefix,
+    required List<DriveFileInfo> files,
   }) async {
     var pageToken = null as String?;
 
@@ -246,7 +275,7 @@ class DriveFolderService {
         q: _scanQuery(folderId),
         pageSize: pageSize,
         pageToken: pageToken,
-        fields: 'nextPageToken, files(id, name, mimeType)',
+        fields: 'nextPageToken, files(id, name, mimeType, modifiedTime)',
       );
 
       for (final file in response.files ?? const <drive.File>[]) {
@@ -256,12 +285,23 @@ class DriveFolderService {
 
         if (_isFolder(file)) {
           if (name == '.obsidian') continue;
-          await _collectFileIdsRecursive(folderId: id, fileIds: fileIds);
+          await _collectAllFilesRecursive(
+            folderId: id,
+            pathPrefix: '$pathPrefix$name/',
+            files: files,
+          );
           continue;
         }
 
         if (_isMarkdownFile(name)) {
-          fileIds.add(id);
+          files.add(
+            DriveFileInfo(
+              id: id,
+              name: name,
+              path: '$pathPrefix$name',
+              modifiedTime: file.modifiedTime?.toIso8601String(),
+            ),
+          );
         }
       }
 
