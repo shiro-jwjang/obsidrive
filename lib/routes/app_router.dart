@@ -180,6 +180,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     final syncStatus = ref.watch(syncStatusProvider);
     final isOnline = ref.watch(isOnlineProvider);
+    final scanProgress = ref.watch(scanProgressProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -213,6 +214,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               icon: const Icon(Icons.search),
             ),
             IconButton(
+              tooltip: 'Drive에서 새로고침',
+              onPressed: isOnline && scanProgress.status != ScanStatus.syncing
+                  ? () async {
+                      final vault = await ref.read(selectedVaultProvider.future);
+                      if (vault == null) return;
+                      await ref.read(vaultScannerProvider).manualRefresh(
+                        vaultId: vault.id,
+                        rootFolderId: vault.driveFolderId,
+                        vaultName: vault.name,
+                      );
+                    }
+                  : null,
+              icon: const Icon(Icons.refresh),
+            ),
+            IconButton(
               tooltip: '오프라인 동기화',
               onPressed: isOnline && syncStatus.status != CacheSyncPhase.syncing
                   ? () => ref
@@ -234,9 +250,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           if (!isOnline) const OfflineBanner(),
           if (!_isSearching) CacheProgress(status: syncStatus),
           if (!_isSearching &&
-              widget.scanProgress.status == ScanStatus.syncing &&
-              widget.scanProgress.phase == ScanPhase.fullScan)
-            _FullScanProgress(progress: widget.scanProgress),
+              scanProgress.status == ScanStatus.syncing &&
+              scanProgress.phase == ScanPhase.fullScan)
+            _FullScanProgress(progress: scanProgress),
           if (!_isSearching) _FavoriteNotesSection(vaultId: widget.vault.id),
           Expanded(
             child: _isSearching

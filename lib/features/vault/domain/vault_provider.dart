@@ -447,6 +447,20 @@ class VaultScanner {
     }
   }
 
+  /// Manually trigger a full scan refresh (user-initiated).
+  Future<void> manualRefresh({
+    required int vaultId,
+    required String rootFolderId,
+    required String vaultName,
+  }) async {
+    await backgroundFullScan(
+      vaultId: vaultId,
+      rootFolderId: rootFolderId,
+      vaultName: vaultName,
+    );
+    _invalidateVaults();
+  }
+
   Future<void> _markVaultSynced(int vaultId) async {
     final vault = await _repository.getVault(vaultId);
     if (vault == null) return;
