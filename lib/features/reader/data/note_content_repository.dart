@@ -111,11 +111,32 @@ class NoteContentRepository {
         return offlineContent;
       }
 
+      final dbContent = cached.content;
+      if (dbContent != null) {
+        return dbContent;
+      }
+
       throw const OfflineNoteUnavailableException();
     }
 
-    if (_hasFreshCache(cached)) {
+    if (cached.content != null) {
       return cached.content!;
+    }
+
+    final content = await _driveClient.downloadMarkdown(cached.driveFileId);
+    await _store.upsertNote(
+      cached.copyWith(
+        content: Value(content),
+        cachedAt: Value(_now().toIso8601String()),
+      ),
+    );
+    return content;
+  }
+
+  Future<String?> revalidateIfNeeded(Note note) async {
+    final cached = await _latestNote(note);
+    if (!_isOnline() || _hasFreshCache(cached) || cached.content == null) {
+      return null;
     }
 
     final content = await _driveClient.downloadMarkdown(cached.driveFileId);

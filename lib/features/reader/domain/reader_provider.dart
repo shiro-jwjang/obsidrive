@@ -43,6 +43,13 @@ final noteContentProvider = FutureProvider.family<String, Note>((ref, note) {
   return ref.watch(noteContentRepositoryProvider).getContent(note);
 });
 
+final backgroundRevalidateProvider = FutureProvider.family<String?, Note>((
+  ref,
+  note,
+) {
+  return ref.watch(noteContentRepositoryProvider).revalidateIfNeeded(note);
+});
+
 final vaultWikilinksProvider = FutureProvider.family<List<Note>, int>((
   ref,
   vaultId,

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -18,6 +20,7 @@ class ReaderScreen extends ConsumerStatefulWidget {
 class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   bool _isEditing = false;
   bool _isSaving = false;
+  int? _revalidatedNoteId;
   late final TextEditingController _titleController;
   late final FocusNode _titleFocusNode;
 
@@ -130,18 +133,22 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       ),
       body: _isEditing
           ? content.when(
-              data: (markdown) => buildMarkdownEditor(
-                initialContent: markdown,
-                onSaved: (newContent) => _saveContent(note, newContent),
-                onCancelled: () {
-                  setState(() => _isEditing = false);
-                },
-              ),
+              data: (markdown) {
+                _scheduleBackgroundRevalidation(note);
+                return buildMarkdownEditor(
+                  initialContent: markdown,
+                  onSaved: (newContent) => _saveContent(note, newContent),
+                  onCancelled: () {
+                    setState(() => _isEditing = false);
+                  },
+                );
+              },
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('오류: $e')),
             )
           : content.when(
               data: (markdown) {
+                _scheduleBackgroundRevalidation(note);
                 final notes = vaultNotes.value ?? const <Note>[];
                 final rendered = parseFrontmatter(markdown);
                 if (rendered.trim().isEmpty) {
@@ -164,6 +171,26 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               ),
             ),
     );
+  }
+
+  void _scheduleBackgroundRevalidation(Note note) {
+    if (_revalidatedNoteId == note.id) {
+      return;
+    }
+
+    _revalidatedNoteId = note.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_revalidateInBackground(note));
+    });
+  }
+
+  Future<void> _revalidateInBackground(Note note) async {
+    final repository = ref.read(noteContentRepositoryProvider);
+    final freshContent = await repository.revalidateIfNeeded(note);
+    if (freshContent != null && mounted) {
+      ref.invalidate(noteContentProvider(note));
+    }
   }
 
   void _startEditing(Note note) {
