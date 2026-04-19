@@ -17,7 +17,8 @@ Widget buildMarkdownView({
   required List<Note> notes,
   required WikilinkTapCallback onWikilinkTap,
 }) {
-  final processed = _preprocessWikilinks(markdown);
+  final hardBreaks = _convertSoftBreaks(markdown);
+  final processed = _preprocessWikilinks(hardBreaks);
   final html = md.markdownToHtml(
     processed,
     extensionSet: md.ExtensionSet.gitHubFlavored,
@@ -25,6 +26,29 @@ Widget buildMarkdownView({
   final resolvedHtml = _resolveWikilinkStyles(html, notes);
 
   return _HtmlMarkdownView(html: resolvedHtml, onWikilinkTap: onWikilinkTap);
+}
+
+/// Convert single newlines (soft breaks) to markdown hard breaks (two trailing spaces).
+/// Preserves paragraph breaks (double newlines) and code blocks.
+String _convertSoftBreaks(String text) {
+  final buffer = StringBuffer();
+  final lines = text.split('\n');
+  for (var i = 0; i < lines.length; i++) {
+    buffer.write(lines[i]);
+    if (i < lines.length - 1) {
+      final isBlank = lines[i].trimRight().isEmpty;
+      final nextIsBlank =
+          i + 1 < lines.length && lines[i + 1].trimRight().isEmpty;
+      if (isBlank || nextIsBlank) {
+        // Paragraph break — keep as-is
+        buffer.writeln();
+      } else {
+        // Soft break — convert to hard break
+        buffer.writeln('  ');
+      }
+    }
+  }
+  return buffer.toString();
 }
 
 String _preprocessWikilinks(String markdown) {
