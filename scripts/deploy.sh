@@ -27,7 +27,14 @@ sed -i "s|CupertinoIcons.ttf|CupertinoIcons.ttf?$VERSION_TAG|" \
     build/web/assets/FontManifest.json
 
 echo "=== Deploying ==="
-docker restart obsidrive-web
+if docker ps -a --format '{{.Names}}' | grep -q '^obsidrive-web$'; then
+  docker rm -f obsidrive-web
+fi
+docker run -d --name obsidrive-web \
+  -p 8090:80 \
+  -v "$(pwd)/build/web:/usr/share/nginx/html:ro" \
+  --restart unless-stopped \
+  nginx:alpine
 sleep 2
 
 echo "=== Verifying ==="
