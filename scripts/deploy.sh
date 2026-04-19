@@ -9,7 +9,7 @@ FLUTTER="/home/openclaw/flutter/bin/flutter"
 VERSION_TAG="v$(date +%Y%m%d%H%M)"
 
 echo "=== Building Obsidrive ==="
-$FLUTTER build web --no-wasm-dry-run --release
+$FLUTTER build web --no-wasm-dry-run --release --no-tree-shake-icons
 
 echo "=== Applying cache-bust tags ($VERSION_TAG) ==="
 # Add version to main.dart.js path in flutter_bootstrap.js
