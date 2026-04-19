@@ -11,7 +11,7 @@ const _fontFamilyFallback = <String>[
 
 ThemeData buildLightTheme() {
   final colorScheme = ColorScheme.fromSeed(
-    seedColor: const Color(0xFF00796B),
+    seedColor: const Color(0xFF7C3AED),
     brightness: Brightness.light,
   ).copyWith(surface: Colors.white);
 
@@ -42,7 +42,7 @@ ThemeData buildLightTheme() {
 
 ThemeData buildDarkTheme() {
   final colorScheme = ColorScheme.fromSeed(
-    seedColor: const Color(0xFF26A69A),
+    seedColor: const Color(0xFF7C3AED),
     brightness: Brightness.dark,
   ).copyWith(surface: const Color(0xFF1E1F20));
 

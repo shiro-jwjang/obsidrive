@@ -1,11 +1,11 @@
 {
-    "name": "obsidrive",
-    "short_name": "obsidrive",
+    "name": "Obsidrive",
+    "short_name": "Obsidrive",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#1E1F20",
+    "theme_color": "#7C3AED",
+    "description": "Obsidian vault reader on the go",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
