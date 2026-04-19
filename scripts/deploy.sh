@@ -17,8 +17,14 @@ sed -i "s|\"mainJsPath\":\"main.dart.js\"|\"mainJsPath\":\"main.dart.js?$VERSION
     build/web/flutter_bootstrap.js
 
 # Add version to flutter_bootstrap.js in index.html
-sed -i "s|src=\"flutter_bootstrap.js\"|src=\"flutter_bootstrap.js?$VERSION_TAG\"|" \
+sed -i "s|src=\\\"flutter_bootstrap.js\\\"|src=\\\"flutter_bootstrap.js?$VERSION_TAG\\\"|" \
     build/web/index.html
+
+# Add version to font assets in FontManifest.json (bust Cloudflare cache)
+sed -i "s|MaterialIcons-Regular.otf|MaterialIcons-Regular.otf?$VERSION_TAG|" \
+    build/web/assets/FontManifest.json
+sed -i "s|CupertinoIcons.ttf|CupertinoIcons.ttf?$VERSION_TAG|" \
+    build/web/assets/FontManifest.json
 
 echo "=== Deploying ==="
 docker restart obsidrive-web
