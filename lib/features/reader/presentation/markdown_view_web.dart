@@ -135,7 +135,7 @@ class _HtmlMarkdownViewState extends State<_HtmlMarkdownView> {
   h2 { font-size: 1.5em; margin-top: 1.2em; margin-bottom: 0.3em; font-weight: 600; border-bottom: 1px solid #e5e5e5; padding-bottom: 0.2em; }
   h3 { font-size: 1.25em; margin-top: 1em; margin-bottom: 0.3em; font-weight: 600; }
   h4, h5, h6 { font-size: 1em; margin-top: 0.8em; font-weight: 600; }
-  p { margin: 0.6em 0; }
+  p { margin: 0.6em 0; white-space: pre-line; }
   ul, ol { padding-left: 1.5em; margin: 0.5em 0; }
   li { margin: 0.2em 0; }
   a { color: #2563eb; text-decoration: none; }
