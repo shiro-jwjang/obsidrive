@@ -149,6 +149,7 @@ class DriveFolderService {
     required String pathPrefix,
   }) async {
     final notes = <NotesCompanion>[];
+    final normalizedPathPrefix = _normalizePathPrefix(pathPrefix);
     var pageToken = null as String?;
 
     do {
@@ -169,7 +170,7 @@ class DriveFolderService {
           NotesCompanion.insert(
             vaultId: Value(vaultId),
             title: Value(_titleFromName(name)),
-            filePath: Value('$pathPrefix$name'),
+            filePath: Value('$normalizedPathPrefix$name'),
             driveFileId: Value(id),
             updatedAt: Value(file.modifiedTime?.toIso8601String()),
           ),
@@ -397,6 +398,13 @@ class DriveFolderService {
 
   static String _titleFromName(String name) {
     return name.substring(0, name.length - 3);
+  }
+
+  static String _normalizePathPrefix(String pathPrefix) {
+    if (pathPrefix.isEmpty || pathPrefix.endsWith('/')) {
+      return pathPrefix;
+    }
+    return '$pathPrefix/';
   }
 
   static String _folderQuery(String parentFolderId) {

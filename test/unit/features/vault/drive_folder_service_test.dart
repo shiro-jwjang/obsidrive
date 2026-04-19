@@ -125,6 +125,29 @@ void main() {
       expect(client.requests.last.q, contains("'notes' in parents"));
     });
 
+    test('listFilesInFolder separates folder path from file name', () async {
+      final client = FakeDriveFilesClient()
+        ..queueResponse(
+          drive.FileList(
+            files: <drive.File>[
+              markdown('root-note', 'Root.md'),
+              drive.File(id: 'image', name: 'photo.png', mimeType: 'image/png'),
+            ],
+          ),
+        );
+      final service = DriveFolderService(client);
+
+      final notes = await service.listFilesInFolder(
+        vaultId: 7,
+        folderId: 'folder-notes',
+        pathPrefix: 'Notes',
+      );
+
+      expect(notes.map((note) => note.filePath.value), <String>[
+        'Notes/Root.md',
+      ]);
+    });
+
     test(
       'getAllFiles returns markdown metadata with recursive paths',
       () async {

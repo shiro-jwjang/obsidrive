@@ -26,6 +26,7 @@ class _FolderTreeWidgetState extends ConsumerState<FolderTreeWidget> {
   @override
   Widget build(BuildContext context) {
     final root = _buildFolderTree(widget.folders, widget.notes);
+    _logTreeDiagnostics(root);
     final children = root.sortedChildren;
 
     if (children.isEmpty) {
@@ -114,6 +115,42 @@ class _FolderTreeWidgetState extends ConsumerState<FolderTreeWidget> {
 
   static bool _isMarkdownPath(String path) {
     return path.toLowerCase().endsWith('.md');
+  }
+
+  void _logTreeDiagnostics(_TreeFolder root) {
+    _consoleLog(
+      '[FolderTree] vault id=${widget.vault.id} '
+      'name="${widget.vault.name}" '
+      'driveFolderId=${widget.vault.driveFolderId} '
+      'folders=${widget.folders.length} notes=${widget.notes.length}',
+    );
+
+    for (final folder in widget.folders) {
+      _consoleLog(
+        '[FolderTree] folder id=${folder.id} '
+        'name="${folder.name}" parentId=${folder.parentId}',
+      );
+    }
+
+    for (final note in widget.notes) {
+      _consoleLog(
+        '[FolderTree] note id=${note.id} '
+        'filePath="${note.filePath}" title="${note.title}" '
+        'driveFileId=${note.driveFileId}',
+      );
+    }
+
+    for (final child in root.sortedChildren) {
+      _consoleLog(
+        '[FolderTree] root child type=${child is _TreeFolder ? 'folder' : 'file'} '
+        'name="${child.name}"',
+      );
+    }
+  }
+
+  void _consoleLog(String message) {
+    // ignore: avoid_print
+    print(message);
   }
 }
 
