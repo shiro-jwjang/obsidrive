@@ -29,15 +29,40 @@ class _FolderTreeWidgetState extends ConsumerState<FolderTreeWidget> {
     final children = root.sortedChildren;
 
     if (children.isEmpty) {
-      return const Center(child: Text('표시할 마크다운 파일이 없습니다.'));
+      return RefreshIndicator(
+        onRefresh: () => ref
+            .read(vaultScannerProvider)
+            .manualRefresh(
+              vaultId: widget.vault.id,
+              rootFolderId: widget.vault.driveFolderId,
+              vaultName: widget.vault.name,
+            ),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const <Widget>[
+            SizedBox(height: 80),
+            Center(child: Text('표시할 마크다운 파일이 없습니다.')),
+          ],
+        ),
+      );
     }
 
-    return ListView(
-      cacheExtent: 500,
-      children: <Widget>[
-        for (final child in children)
-          _TreeNodeTile(node: child, depth: 0, vault: widget.vault),
-      ],
+    return RefreshIndicator(
+      onRefresh: () => ref
+          .read(vaultScannerProvider)
+          .manualRefresh(
+            vaultId: widget.vault.id,
+            rootFolderId: widget.vault.driveFolderId,
+            vaultName: widget.vault.name,
+          ),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        cacheExtent: 500,
+        children: <Widget>[
+          for (final child in children)
+            _TreeNodeTile(node: child, depth: 0, vault: widget.vault),
+        ],
+      ),
     );
   }
 

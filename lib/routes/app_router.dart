@@ -217,13 +217,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               tooltip: 'Drive에서 새로고침',
               onPressed: isOnline && scanProgress.status != ScanStatus.syncing
                   ? () async {
-                      final vault = await ref.read(selectedVaultProvider.future);
-                      if (vault == null) return;
-                      await ref.read(vaultScannerProvider).manualRefresh(
-                        vaultId: vault.id,
-                        rootFolderId: vault.driveFolderId,
-                        vaultName: vault.name,
+                      final vault = await ref.read(
+                        selectedVaultProvider.future,
                       );
+                      if (vault == null) return;
+                      await ref
+                          .read(vaultScannerProvider)
+                          .manualRefresh(
+                            vaultId: vault.id,
+                            rootFolderId: vault.driveFolderId,
+                            vaultName: vault.name,
+                          );
                     }
                   : null,
               icon: const Icon(Icons.refresh),
