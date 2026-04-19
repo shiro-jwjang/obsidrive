@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 // ignore: depend_on_referenced_packages
@@ -47,6 +48,30 @@ final selectedVaultNotesProvider = FutureProvider<List<Note>>((ref) async {
   }
 
   return ref.watch(vaultRepositoryProvider).listNotes(vault.id);
+});
+
+final favoriteNotesProvider = FutureProvider.family<List<Note>, int>((
+  ref,
+  vaultId,
+) {
+  final db = ref.watch(appDatabaseProvider);
+  return (db.select(db.notes)
+        ..where((t) => t.vaultId.equals(vaultId) & t.isFavorite.equals(true))
+        ..orderBy([(t) => OrderingTerm.asc(t.title)]))
+      .get();
+});
+
+final toggleFavoriteProvider = Provider<Future<Note> Function(Note)>((ref) {
+  return (note) async {
+    final db = ref.read(appDatabaseProvider);
+    final updated = note.copyWith(isFavorite: !note.isFavorite);
+    await (db.update(db.notes)..where((t) => t.id.equals(note.id))).write(
+      NotesCompanion(isFavorite: Value(updated.isFavorite)),
+    );
+    ref.invalidate(favoriteNotesProvider(note.vaultId));
+    ref.invalidate(selectedVaultNotesProvider);
+    return updated;
+  };
 });
 
 final noteSearchProvider = FutureProvider.family<List<Note>, String>((

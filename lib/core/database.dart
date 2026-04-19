@@ -21,6 +21,7 @@ class Notes extends Table {
   TextColumn get content => text().nullable()();
   TextColumn get cachedAt => text().nullable()();
   TextColumn get updatedAt => text().nullable()();
+  BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
 
   @override
   List<Set<Column>> get uniqueKeys => [
@@ -82,7 +83,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -90,7 +91,11 @@ class AppDatabase extends _$AppDatabase {
       await m.createAll();
     },
     onUpgrade: (Migrator m, int from, int to) async {
-      await m.createAll();
+      if (from < 3) {
+        await customStatement(
+          'ALTER TABLE notes ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0',
+        );
+      }
     },
   );
 }

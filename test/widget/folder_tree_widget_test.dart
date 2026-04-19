@@ -99,5 +99,6 @@ Note note({
     filePath: path,
     driveFileId: driveFileId ?? 'drive-$id',
     updatedAt: DateTime.utc(2026, 4, 13).toIso8601String(),
+    isFavorite: false,
   );
 }

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/markdown_parser.dart';
 import '../../vault/domain/vault_models.dart';
+import '../../vault/domain/vault_provider.dart';
 import '../domain/reader_provider.dart';
 import 'markdown_editor.dart';
 import 'markdown_view.dart';
@@ -122,6 +123,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               ),
           ] else ...[
             IconButton(
+              icon: Icon(note.isFavorite ? Icons.star : Icons.star_outline),
+              tooltip: note.isFavorite ? '즐겨찾기 해제' : '즐겨찾기',
+              onPressed: () => _toggleFavorite(note),
+            ),
+            IconButton(
               icon: const Icon(Icons.edit_outlined),
               tooltip: '편집',
               onPressed: content.hasValue && content.value != null
@@ -208,6 +214,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         extentOffset: _titleController.text.length,
       );
     });
+  }
+
+  Future<void> _toggleFavorite(Note note) async {
+    final updated = await ref.read(toggleFavoriteProvider)(note);
+    ref.read(currentNoteProvider.notifier).state = updated;
   }
 
   Widget _buildTitleField(BuildContext context) {

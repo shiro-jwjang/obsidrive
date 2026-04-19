@@ -237,6 +237,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               widget.scanProgress.status == ScanStatus.syncing &&
               widget.scanProgress.phase == ScanPhase.fullScan)
             _FullScanProgress(progress: widget.scanProgress),
+          if (!_isSearching) _FavoriteNotesSection(vaultId: widget.vault.id),
           Expanded(
             child: _isSearching
                 ? _NoteSearchResults(query: _searchQuery)
@@ -263,6 +264,70 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       _isSearching = false;
       _searchQuery = '';
     });
+  }
+}
+
+class _FavoriteNotesSection extends ConsumerWidget {
+  const _FavoriteNotesSection({required this.vaultId});
+
+  final int vaultId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final favorites = ref.watch(favoriteNotesProvider(vaultId));
+
+    return favorites.when(
+      data: (notes) {
+        if (notes.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final theme = Theme.of(context);
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Icon(Icons.star, size: 16, color: theme.colorScheme.primary),
+                  const SizedBox(width: 6),
+                  Text('즐겨찾기', style: theme.textTheme.titleSmall),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 44,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: notes.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final note = notes[index];
+                    return OutlinedButton.icon(
+                      onPressed: () => context.push('/reader', extra: note),
+                      icon: const Icon(Icons.star, size: 16),
+                      label: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 180),
+                        child: Text(
+                          note.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (error, stackTrace) => const SizedBox.shrink(),
+    );
   }
 }
 

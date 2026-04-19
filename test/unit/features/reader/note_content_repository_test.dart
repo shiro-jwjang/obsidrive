@@ -108,6 +108,7 @@ Note note({String? content, DateTime? cachedAt}) {
     content: content,
     cachedAt: cachedAt?.toIso8601String(),
     updatedAt: DateTime.utc(2026, 4, 13, 8).toIso8601String(),
+    isFavorite: false,
   );
 }
 

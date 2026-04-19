@@ -112,5 +112,6 @@ Note note({required int id, required String title, required String path}) {
     title: title,
     filePath: path,
     driveFileId: 'drive-$id',
+    isFavorite: false,
   );
 }

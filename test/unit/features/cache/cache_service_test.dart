@@ -132,6 +132,7 @@ Note note({
     filePath: filePath,
     driveFileId: driveFileId,
     updatedAt: (updatedAt ?? DateTime.utc(2026, 4, 13, 9)).toIso8601String(),
+    isFavorite: false,
   );
 }
 

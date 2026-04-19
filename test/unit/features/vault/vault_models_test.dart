@@ -103,5 +103,6 @@ Note _note({
     driveFileId: 'drive-$id',
     cachedAt: cachedAt?.toIso8601String(),
     updatedAt: updatedAt?.toIso8601String(),
+    isFavorite: false,
   );
 }
