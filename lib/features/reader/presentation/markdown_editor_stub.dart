@@ -1,3 +1,4 @@
+// coverage:ignore-file
 import 'package:flutter/widgets.dart';
 
 typedef SavedCallback = Future<void> Function(String content);

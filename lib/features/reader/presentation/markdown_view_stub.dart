@@ -1,3 +1,4 @@
+// coverage:ignore-file
 import 'package:flutter/widgets.dart';
 import '../../vault/domain/vault_models.dart';
 

@@ -83,12 +83,110 @@ void main() {
     final preferences = await SharedPreferences.getInstance();
     expect(preferences.getString('auth.accessToken'), 'fresh-token');
   });
+
+  test('signIn throws AuthException when user cancels', () async {
+    await expectLater(
+      createRepository().signIn(),
+      throwsA(
+        isA<AuthException>().having(
+          (error) => error.message,
+          'message',
+          '로그인이 취소되었습니다.',
+        ),
+      ),
+    );
+  });
+
+  test('signOut calls gateway and clears saved session', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth.user.id': 'saved-user',
+      'auth.user.email': 'saved@example.com',
+      'auth.accessToken': 'saved-token',
+      'auth.expiresAt': now.add(const Duration(minutes: 20)).toIso8601String(),
+    });
+
+    await createRepository().signOut();
+
+    final preferences = await SharedPreferences.getInstance();
+    expect(googleSignIn.signOutCount, 1);
+    expect(preferences.getString('auth.user.id'), isNull);
+    expect(preferences.getString('auth.accessToken'), isNull);
+  });
+
+  test(
+    'restoreSession returns null for incomplete or invalid saved user',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth.user.id': 'saved-user',
+        'auth.user.email': 'saved@example.com',
+        'auth.accessToken': 'saved-token',
+        'auth.expiresAt': 'not-a-date',
+      });
+
+      expect(await createRepository().restoreSession(), isNull);
+
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'auth.user.id': 'saved-user',
+        'auth.user.email': 'saved@example.com',
+      });
+
+      expect(await createRepository().restoreSession(), isNull);
+    },
+  );
+
+  test('restoreSession refresh failure clears session and throws', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth.user.id': 'saved-user',
+      'auth.user.email': 'saved@example.com',
+      'auth.accessToken': 'expired-token',
+      'auth.expiresAt': now
+          .subtract(const Duration(minutes: 1))
+          .toIso8601String(),
+    });
+
+    await expectLater(
+      createRepository().restoreSession(),
+      throwsA(
+        isA<AuthException>().having(
+          (error) => error.message,
+          'message',
+          '다시 로그인해 주세요.',
+        ),
+      ),
+    );
+
+    final preferences = await SharedPreferences.getInstance();
+    expect(preferences.getString('auth.user.id'), isNull);
+    expect(preferences.getString('auth.accessToken'), isNull);
+  });
+
+  test('refreshToken clears session when silent sign-in throws', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth.user.id': 'saved-user',
+      'auth.user.email': 'saved@example.com',
+      'auth.accessToken': 'expired-token',
+      'auth.expiresAt': now
+          .subtract(const Duration(minutes: 1))
+          .toIso8601String(),
+    });
+    googleSignIn.silentError = StateError('network');
+
+    await expectLater(
+      createRepository().refreshToken(),
+      throwsA(isA<AuthException>()),
+    );
+
+    final preferences = await SharedPreferences.getInstance();
+    expect(preferences.getString('auth.user.id'), isNull);
+  });
 }
 
 class FakeGoogleSignInClient implements GoogleSignInClient {
   GatewayUser? interactiveUser;
   GatewayUser? silentUser;
+  Object? silentError;
   int interactiveSignInCount = 0;
+  int signOutCount = 0;
 
   @override
   final requestedScopes = <String>[AuthRepository.driveScope];
@@ -100,8 +198,15 @@ class FakeGoogleSignInClient implements GoogleSignInClient {
   }
 
   @override
-  Future<GatewayUser?> signInSilently() async => silentUser;
+  Future<GatewayUser?> signInSilently() async {
+    final currentError = silentError;
+    if (currentError is Error) throw currentError;
+    if (currentError is Exception) throw currentError;
+    return silentUser;
+  }
 
   @override
-  Future<void> signOut() async {}
+  Future<void> signOut() async {
+    signOutCount += 1;
+  }
 }

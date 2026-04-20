@@ -14,12 +14,14 @@ void main() {
     expect(find.text('Plan.md'), findsNothing);
 
     await tester.tap(find.text('Projects'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
 
     expect(find.text('Plan.md'), findsOneWidget);
 
     await tester.tap(find.text('Projects'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
 
     expect(find.text('Plan.md'), findsNothing);
   });
@@ -42,7 +44,8 @@ void main() {
     await tester.pumpWidget(treeApp(sampleNotes(), opened: opened));
 
     await tester.tap(find.text('Root.md'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
 
     expect(opened.single.driveFileId, 'root-note');
     expect(find.text('Reader: Root'), findsOneWidget);

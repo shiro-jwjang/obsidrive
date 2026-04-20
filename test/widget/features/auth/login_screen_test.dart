@@ -33,7 +33,8 @@ void main() {
 
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 2));
+    await tester.pump();
 
     expect(repository.signInCount, 1);
     expect(find.text('reader@example.com'), findsOneWidget);
@@ -54,7 +55,8 @@ void main() {
     );
 
     await tester.tap(find.text('구글 계정으로 시작'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
 
     expect(find.text('네트워크 오류가 발생했습니다.'), findsOneWidget);
     expect(find.text('재시도'), findsOneWidget);
@@ -69,7 +71,8 @@ void main() {
       );
 
     await tester.tap(find.text('재시도'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
 
     expect(repository.signInCount, 2);
     expect(find.text('retry@example.com'), findsOneWidget);

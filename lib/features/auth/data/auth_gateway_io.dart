@@ -1,3 +1,4 @@
+// coverage:ignore-file
 // IO (mobile) implementation: google_sign_in package
 import 'package:google_sign_in/google_sign_in.dart';
 

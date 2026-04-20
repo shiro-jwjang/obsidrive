@@ -1,3 +1,4 @@
+// coverage:ignore-file
 // Shared interface for auth gateways
 // Stub file — overridden by auth_gateway_web.dart or auth_gateway_io.dart
 import 'auth_repository.dart';

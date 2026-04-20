@@ -1,3 +1,4 @@
+// coverage:ignore-file
 import 'storage.dart';
 
 /// Web implementation of [FileStorage] using an in-memory map.

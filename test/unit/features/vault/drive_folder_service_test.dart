@@ -234,6 +234,101 @@ void main() {
         expect(client.requests.first.q, contains("name contains '.md'"));
       },
     );
+
+    test(
+      'listAllFoldersRecursive returns empty when root has no folders',
+      () async {
+        final client = FakeDriveFilesClient()
+          ..queueResponse(drive.FileList(files: const <drive.File>[]));
+        final service = DriveFolderService(client);
+
+        final folders = await service.listAllFoldersRecursive('root');
+
+        expect(folders, isEmpty);
+        expect(client.requests.single.q, contains("'root' in parents"));
+      },
+    );
+
+    test(
+      'listAllFoldersRecursive keeps .obsidian but does not descend into it',
+      () async {
+        final client = FakeDriveFilesClient()
+          ..queueResponse(
+            drive.FileList(
+              files: <drive.File>[
+                folder('obsidian', '.obsidian'),
+                folder('notes', 'Notes'),
+              ],
+            ),
+          )
+          ..queueResponse(drive.FileList(files: <drive.File>[]));
+        final service = DriveFolderService(client);
+
+        final folders = await service.listAllFoldersRecursive('root');
+
+        expect(folders.map((folder) => folder.id), <String>[
+          'obsidian',
+          'notes',
+        ]);
+        expect(client.requests, hasLength(2));
+        expect(client.requests.last.q, contains("'notes' in parents"));
+      },
+    );
+
+    test('fetchAllFilesParallel handles empty folder map', () async {
+      final client = FakeDriveFilesClient()
+        ..queueResponse(drive.FileList(files: <drive.File>[]));
+      final service = DriveFolderService(client);
+
+      final files = await service.fetchAllFilesParallel(
+        const <String, String>{},
+        rootFolderId: 'root',
+      );
+
+      expect(files, isEmpty);
+      expect(client.requests.single.q, contains("'root' in parents"));
+    });
+
+    test('fetchAllFilesParallel clamps invalid concurrency to one', () async {
+      final client = FakeDriveFilesClient()
+        ..queueResponse(
+          drive.FileList(files: <drive.File>[markdown('root', 'Root.md')]),
+        )
+        ..queueResponse(
+          drive.FileList(files: <drive.File>[markdown('child', 'Child.md')]),
+        );
+      final service = DriveFolderService(client);
+
+      final files = await service.fetchAllFilesParallel(
+        const <String, String>{'child-folder': 'Child'},
+        rootFolderId: 'root',
+        concurrency: 0,
+      );
+
+      expect(files.map((file) => file.path), <String>[
+        'Root.md',
+        'Child/Child.md',
+      ]);
+      expect(client.requests, hasLength(2));
+    });
+
+    test('scanVault reports progress for empty single folder', () async {
+      final progress = <String>[];
+      final client = FakeDriveFilesClient()
+        ..queueResponse(drive.FileList(files: const <drive.File>[]));
+      final service = DriveFolderService(client);
+
+      final notes = await service.scanVault(
+        vaultId: 1,
+        rootFolderId: 'root',
+        onProgress: (notesFound, currentFolder) {
+          progress.add('$notesFound:$currentFolder');
+        },
+      );
+
+      expect(notes, isEmpty);
+      expect(progress, <String>['0:']);
+    });
   });
 }
 
