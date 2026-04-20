@@ -161,12 +161,14 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
   var _isSearching = false;
   var _searchQuery = '';
 
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -187,6 +189,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         title: _isSearching
             ? TextField(
                 controller: _searchController,
+                focusNode: _searchFocusNode,
                 autofocus: true,
                 decoration: const InputDecoration(
                   hintText: '노트 검색...',
@@ -275,6 +278,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void _openSearch() {
     setState(() {
       _isSearching = true;
+    });
+    // Explicitly request focus after the frame rebuilds
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _searchFocusNode.requestFocus();
     });
   }
 
