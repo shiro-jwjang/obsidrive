@@ -264,6 +264,83 @@ class DriveFolderService {
     return files;
   }
 
+  /// Fetch markdown files from multiple folders in parallel.
+  ///
+  /// [folderPathMap] maps Drive folder IDs to their vault-relative paths.
+  /// [rootFolderId] is included separately because it has an empty path.
+  Future<List<DriveFileInfo>> fetchAllFilesParallel(
+    Map<String, String> folderPathMap, {
+    required String rootFolderId,
+    int concurrency = 5,
+  }) async {
+    final allFiles = <DriveFileInfo>[];
+    final folderIds = <String>[
+      rootFolderId,
+      ...folderPathMap.keys.where((folderId) => folderId != rootFolderId),
+    ];
+    final safeConcurrency = concurrency < 1 ? 1 : concurrency;
+
+    for (var i = 0; i < folderIds.length; i += safeConcurrency) {
+      final batch = folderIds.sublist(
+        i,
+        (i + safeConcurrency).clamp(0, folderIds.length),
+      );
+
+      final results = await Future.wait(
+        batch.map((folderId) {
+          final pathPrefix = folderId == rootFolderId
+              ? ''
+              : folderPathMap[folderId] ?? '';
+          return _fetchFilesInFolder(folderId, pathPrefix);
+        }),
+      );
+
+      for (final files in results) {
+        allFiles.addAll(files);
+      }
+    }
+
+    return allFiles;
+  }
+
+  Future<List<DriveFileInfo>> _fetchFilesInFolder(
+    String folderId,
+    String pathPrefix,
+  ) async {
+    final files = <DriveFileInfo>[];
+    final normalizedPathPrefix = _normalizePathPrefix(pathPrefix);
+    var pageToken = null as String?;
+
+    do {
+      final response = await _filesClient.list(
+        q: _filesQuery(folderId),
+        pageSize: pageSize,
+        pageToken: pageToken,
+        fields: 'nextPageToken, files(id, name, mimeType, modifiedTime)',
+      );
+
+      for (final file in response.files ?? const <drive.File>[]) {
+        final name = file.name;
+        final id = file.id;
+        if (name == null || id == null) continue;
+        if (!_isMarkdownFile(name)) continue;
+
+        files.add(
+          DriveFileInfo(
+            id: id,
+            name: name,
+            path: '$normalizedPathPrefix$name',
+            modifiedTime: file.modifiedTime?.toIso8601String(),
+          ),
+        );
+      }
+
+      pageToken = response.nextPageToken;
+    } while (pageToken != null);
+
+    return files;
+  }
+
   Future<void> _collectAllFilesRecursive({
     required String folderId,
     required String pathPrefix,
@@ -399,6 +476,8 @@ class DriveFolderService {
   static String _titleFromName(String name) {
     return name.substring(0, name.length - 3);
   }
+
+  static String titleFromFileName(String name) => _titleFromName(name);
 
   static String _normalizePathPrefix(String pathPrefix) {
     if (pathPrefix.isEmpty || pathPrefix.endsWith('/')) {

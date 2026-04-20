@@ -184,6 +184,56 @@ void main() {
         expect(client.requests.first.fields, contains('modifiedTime'));
       },
     );
+
+    test(
+      'fetchAllFilesParallel fetches root and folder files with paths',
+      () async {
+        final modified = DateTime.utc(2026, 1, 2, 3, 4, 5);
+        final client = FakeDriveFilesClient()
+          ..queueResponse(
+            drive.FileList(
+              files: <drive.File>[
+                markdown('root-note', 'Root.md', modifiedTime: modified),
+                drive.File(
+                  id: 'image',
+                  name: 'photo.png',
+                  mimeType: 'image/png',
+                ),
+              ],
+            ),
+          )
+          ..queueResponse(
+            drive.FileList(
+              files: <drive.File>[markdown('nested', 'Nested.md')],
+            ),
+          )
+          ..queueResponse(
+            drive.FileList(files: <drive.File>[markdown('todo', 'Todo.md')]),
+          );
+        final service = DriveFolderService(client);
+
+        final files = await service.fetchAllFilesParallel(
+          const <String, String>{
+            'folder-notes': 'Notes',
+            'folder-projects': 'Projects/Active',
+          },
+          rootFolderId: 'root',
+          concurrency: 2,
+        );
+
+        expect(files.map((file) => file.path), <String>[
+          'Root.md',
+          'Notes/Nested.md',
+          'Projects/Active/Todo.md',
+        ]);
+        expect(files.first.modifiedTime, modified.toIso8601String());
+        expect(client.requests, hasLength(3));
+        expect(client.requests[0].q, contains("'root' in parents"));
+        expect(client.requests[1].q, contains("'folder-notes' in parents"));
+        expect(client.requests[2].q, contains("'folder-projects' in parents"));
+        expect(client.requests.first.q, contains("name contains '.md'"));
+      },
+    );
   });
 }
 

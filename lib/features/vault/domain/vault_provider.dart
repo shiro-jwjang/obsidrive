@@ -222,6 +222,60 @@ class FolderLoadRequest {
   int get hashCode => Object.hash(vaultId, driveFolderId, folderPath);
 }
 
+Map<String, String> _buildFolderPathMap(
+  List<DriveFolder> folders,
+  String rootFolderId,
+) {
+  final byId = <String, DriveFolder>{
+    for (final folder in folders) folder.id: folder,
+  };
+  final memo = <String, String?>{};
+
+  String? pathFor(DriveFolder folder) {
+    if (memo.containsKey(folder.id)) {
+      return memo[folder.id];
+    }
+
+    if (folder.name == '.obsidian') {
+      memo[folder.id] = null;
+      return null;
+    }
+
+    final parentId = folder.parentId;
+    if (parentId == null || parentId == rootFolderId) {
+      memo[folder.id] = folder.name;
+      return folder.name;
+    }
+
+    final parent = byId[parentId];
+    if (parent == null) {
+      memo[folder.id] = folder.name;
+      return folder.name;
+    }
+
+    final parentPath = pathFor(parent);
+    if (parentPath == null) {
+      memo[folder.id] = null;
+      return null;
+    }
+
+    final path = parentPath.isEmpty
+        ? folder.name
+        : '$parentPath/${folder.name}';
+    memo[folder.id] = path;
+    return path;
+  }
+
+  final pathMap = <String, String>{};
+  for (final folder in folders) {
+    final path = pathFor(folder);
+    if (path != null) {
+      pathMap[folder.id] = path;
+    }
+  }
+  return pathMap;
+}
+
 class VaultScanner {
   const VaultScanner({
     required VaultRepository repository,
@@ -332,46 +386,49 @@ class VaultScanner {
           const ScanProgress(
             status: ScanStatus.syncing,
             phase: ScanPhase.fullScan,
-            currentFolder: '변경된 파일 확인 중...',
+            currentFolder: '파일 목록 동기화 중...',
           ),
         );
 
-        final changedNotes = await _driveFolderService.listChangedFiles(
-          vaultId: vaultId,
+        var cachedFolders = await _repository.listFolders(vaultId);
+        if (cachedFolders.isEmpty) {
+          cachedFolders = await _driveFolderService.listAllFoldersRecursive(
+            rootFolderId,
+          );
+          if (cachedFolders.isNotEmpty) {
+            await _repository.cacheFolders(vaultId, cachedFolders);
+          }
+        }
+
+        final folderPathMap = _buildFolderPathMap(cachedFolders, rootFolderId);
+        final allDriveFiles = await _driveFolderService.fetchAllFilesParallel(
+          folderPathMap,
           rootFolderId: rootFolderId,
-          since: lastSyncedAt,
         );
 
-        if (changedNotes.isNotEmpty) {
-          await _repository.upsertNotes(vaultId, changedNotes);
-        }
-
-        _onProgress(
-          ScanProgress(
-            status: ScanStatus.syncing,
-            phase: ScanPhase.fullScan,
-            totalFiles: changedNotes.length,
-            syncedFiles: changedNotes.length,
-            currentFolder: '삭제된 파일 확인 중...',
-          ),
-        );
-
-        final allDriveFiles = await _driveFolderService.getAllFiles(
-          rootFolderId,
-        );
         final driveFileMap = {for (final file in allDriveFiles) file.id: file};
-        final localIds = await _repository.listDriveFileIds(vaultId);
+        final localNotes = await _repository.listNotes(vaultId);
+        final localNoteMap = {
+          for (final note in localNotes) note.driveFileId: note,
+        };
 
-        final missingIds = driveFileMap.keys
-            .where((id) => !localIds.contains(id))
+        final changedOrNew = allDriveFiles
+            .where((file) {
+              final local = localNoteMap[file.id];
+              if (local == null) return true;
+              return local.updatedAt != file.modifiedTime ||
+                  local.filePath != file.path ||
+                  local.title !=
+                      DriveFolderService.titleFromFileName(file.name);
+            })
+            .map((file) => file.toNoteCompanion(vaultId: vaultId))
             .toList();
-        if (missingIds.isNotEmpty) {
-          final missingNotes = missingIds
-              .map((id) => driveFileMap[id]!.toNoteCompanion(vaultId: vaultId))
-              .toList();
-          await _repository.upsertNotes(vaultId, missingNotes);
+
+        if (changedOrNew.isNotEmpty) {
+          await _repository.upsertNotes(vaultId, changedOrNew);
         }
 
+        final localIds = localNoteMap.keys;
         final deletedIds = localIds
             .where((id) => !driveFileMap.containsKey(id))
             .toList();
@@ -386,8 +443,8 @@ class VaultScanner {
           ScanProgress(
             status: ScanStatus.complete,
             phase: ScanPhase.fullScan,
-            totalFiles: changedNotes.length,
-            syncedFiles: changedNotes.length,
+            totalFiles: allDriveFiles.length,
+            syncedFiles: changedOrNew.length,
           ),
         );
 
