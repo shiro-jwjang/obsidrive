@@ -143,6 +143,7 @@ class _HtmlMarkdownViewState extends State<_HtmlMarkdownView> {
     s.width = '100%';
     s.height = 'calc(100vh - 56px)';
     s.overflow = 'auto';
+    s.pointerEvents = 'auto';
     s.padding = '16px';
     s.boxSizing = 'border-box';
     s.zIndex = '100';

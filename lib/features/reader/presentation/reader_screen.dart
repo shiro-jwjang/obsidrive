@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -187,12 +188,18 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                   return const Center(child: Text('빈 노트'));
                 }
 
-                return buildMarkdownView(
+                final markdownView = buildMarkdownView(
                   markdown: rendered,
                   notes: notes,
                   onWikilinkTap: (target) =>
                       _openWikilink(context, ref, note, target),
                 );
+
+                if (!kIsWeb) {
+                  return markdownView;
+                }
+
+                return SelectionContainer.disabled(child: markdownView);
               },
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (error, stackTrace) => Center(
