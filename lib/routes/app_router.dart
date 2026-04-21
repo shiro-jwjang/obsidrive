@@ -13,6 +13,7 @@ import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/vault/domain/vault_models.dart';
 import '../../features/vault/domain/vault_provider.dart';
 import '../../features/vault/presentation/folder_tree_widget.dart';
+import '../../features/vault/presentation/search_input.dart';
 import '../../features/vault/presentation/vault_picker_screen.dart';
 
 class _AuthNotifier extends ChangeNotifier {
@@ -239,29 +240,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       body: Column(
         children: <Widget>[
-          if (_isSearching)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: TextField(
-                controller: _searchController,
-                focusNode: _searchFocusNode,
-                autofocus: true,
-                decoration: InputDecoration(
-                  hintText: '노트 검색...',
-                  prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                ),
-                textInputAction: TextInputAction.search,
-                onChanged: (value) {
-                  setState(() {
-                    _searchQuery = value;
-                  });
-                },
-              ),
-            ),
+          buildSearchInput(
+            isVisible: _isSearching,
+            controller: _searchController,
+            focusNode: _searchFocusNode,
+            onChanged: (value) {
+              setState(() {
+                _searchQuery = value;
+              });
+            },
+            onClosed: _closeSearch,
+          ),
           if (!isOnline) const OfflineBanner(),
           if (!_isSearching) CacheProgress(status: syncStatus),
           if (!_isSearching &&
