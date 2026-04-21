@@ -187,11 +187,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: _isSearching
-            ? TextField(
+        title: Stack(
+          children: [
+            // Title — always mounted, hidden during search
+            Visibility(
+              visible: !_isSearching,
+              maintainState: true,
+              maintainSize: true,
+              maintainAnimation: true,
+              child: Text(widget.vault.name),
+            ),
+            // Search field — always mounted so focusNode is always attached
+            Visibility(
+              visible: _isSearching,
+              maintainState: true,
+              maintainSize: true,
+              maintainAnimation: true,
+              child: TextField(
                 controller: _searchController,
                 focusNode: _searchFocusNode,
-                autofocus: true,
                 decoration: const InputDecoration(
                   hintText: '노트 검색...',
                   border: InputBorder.none,
@@ -202,8 +216,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     _searchQuery = value;
                   });
                 },
-              )
-            : Text(widget.vault.name),
+              ),
+            ),
+          ],
+        ),
         actions: <Widget>[
           if (_isSearching)
             IconButton(
@@ -277,14 +293,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _openSearch() {
+    // Request focus synchronously while still in user gesture context
+    _searchFocusNode.requestFocus();
     setState(() {
       _isSearching = true;
-    });
-    // iOS PWA requires a short delay before focus works
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.delayed(const Duration(milliseconds: 300), () {
-        _searchFocusNode.requestFocus();
-      });
     });
   }
 
