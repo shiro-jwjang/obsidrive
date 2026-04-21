@@ -280,9 +280,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     setState(() {
       _isSearching = true;
     });
-    // Explicitly request focus after the frame rebuilds
+    // iOS PWA requires a short delay before focus works
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _searchFocusNode.requestFocus();
+      Future.delayed(const Duration(milliseconds: 300), () {
+        _searchFocusNode.requestFocus();
+      });
     });
   }
 
