@@ -5,6 +5,7 @@ typedef SearchInputBuilder =
       required bool isVisible,
       required ValueChanged<String> onChanged,
       required VoidCallback onClosed,
+      VoidCallback? onOpen,
       TextEditingController? controller,
       FocusNode? focusNode,
     });
@@ -13,6 +14,7 @@ Widget buildSearchInput({
   required bool isVisible,
   required ValueChanged<String> onChanged,
   required VoidCallback onClosed,
+  VoidCallback? onOpen,
   TextEditingController? controller,
   FocusNode? focusNode,
 }) {

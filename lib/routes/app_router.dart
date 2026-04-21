@@ -1,4 +1,5 @@
 // coverage:ignore-file
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -190,18 +191,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       appBar: AppBar(
         title: Text(widget.vault.name),
         actions: <Widget>[
-          if (_isSearching)
-            IconButton(
-              tooltip: '검색 닫기',
-              onPressed: _closeSearch,
-              icon: const Icon(Icons.close),
-            )
+          // Web: DOM button handles search open/close (iOS Safari keyboard fix)
+          if (!kIsWeb) ...<Widget>[
+            if (_isSearching)
+              IconButton(
+                tooltip: '검색 닫기',
+                onPressed: _closeSearch,
+                icon: const Icon(Icons.close),
+              )
+            else
+              IconButton(
+                tooltip: '노트 검색',
+                onPressed: _openSearch,
+                icon: const Icon(Icons.search),
+              ),
+          ],
+          if (_isSearching && !kIsWeb)
+            const SizedBox.shrink()
           else ...<Widget>[
-            IconButton(
-              tooltip: '노트 검색',
-              onPressed: _openSearch,
-              icon: const Icon(Icons.search),
-            ),
             IconButton(
               tooltip: 'Drive에서 새로고침',
               onPressed: isOnline && scanProgress.status != ScanStatus.syncing
@@ -244,6 +251,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             isVisible: _isSearching,
             controller: _searchController,
             focusNode: _searchFocusNode,
+            onOpen: _openSearch,
             onChanged: (value) {
               setState(() {
                 _searchQuery = value;
