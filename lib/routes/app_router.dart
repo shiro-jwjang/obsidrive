@@ -263,7 +263,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           if (!_isSearching) _FavoriteNotesSection(vaultId: widget.vault.id),
           Expanded(
             child: _isSearching
-                ? _NoteSearchResults(query: _searchQuery)
+                ? _NoteSearchResults(
+                    query: _searchQuery,
+                    onNoteTap: _closeSearch,
+                  )
                 : FolderTreeWidget(
                     vault: widget.vault,
                     folders: widget.folders,
@@ -355,9 +358,10 @@ class _FavoriteNotesSection extends ConsumerWidget {
 }
 
 class _NoteSearchResults extends ConsumerWidget {
-  const _NoteSearchResults({required this.query});
+  const _NoteSearchResults({required this.query, this.onNoteTap});
 
   final String query;
+  final VoidCallback? onNoteTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -386,6 +390,7 @@ class _NoteSearchResults extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(8),
               ),
               onTap: () {
+                onNoteTap?.call();
                 context.push('/reader', extra: note);
               },
             );
