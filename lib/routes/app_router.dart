@@ -187,39 +187,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Stack(
-          children: [
-            // Title — always mounted, hidden during search
-            Visibility(
-              visible: !_isSearching,
-              maintainState: true,
-              maintainSize: true,
-              maintainAnimation: true,
-              child: Text(widget.vault.name),
-            ),
-            // Search field — always mounted so focusNode is always attached
-            Visibility(
-              visible: _isSearching,
-              maintainState: true,
-              maintainSize: true,
-              maintainAnimation: true,
-              child: TextField(
-                controller: _searchController,
-                focusNode: _searchFocusNode,
-                decoration: const InputDecoration(
-                  hintText: '노트 검색...',
-                  border: InputBorder.none,
-                ),
-                textInputAction: TextInputAction.search,
-                onChanged: (value) {
-                  setState(() {
-                    _searchQuery = value;
-                  });
-                },
-              ),
-            ),
-          ],
-        ),
+        title: Text(widget.vault.name),
         actions: <Widget>[
           if (_isSearching)
             IconButton(
@@ -271,6 +239,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       body: Column(
         children: <Widget>[
+          if (_isSearching)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: TextField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: '노트 검색...',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+                textInputAction: TextInputAction.search,
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value;
+                  });
+                },
+              ),
+            ),
           if (!isOnline) const OfflineBanner(),
           if (!_isSearching) CacheProgress(status: syncStatus),
           if (!_isSearching &&
@@ -293,8 +284,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _openSearch() {
-    // Request focus synchronously while still in user gesture context
-    _searchFocusNode.requestFocus();
     setState(() {
       _isSearching = true;
     });
