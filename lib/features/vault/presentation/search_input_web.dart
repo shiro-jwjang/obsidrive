@@ -231,6 +231,9 @@ class _HtmlSearchInputState extends State<_HtmlSearchInput> {
     button.textContent = widget.isVisible ? '✕' : '🔍';
     button.title = widget.isVisible ? '검색 닫기' : '노트 검색';
     button.setAttribute('aria-label', widget.isVisible ? '검색 닫기' : '노트 검색');
+    // When search is closed, don't intercept taps — let them pass through
+    // to Flutter widgets underneath (e.g. edit button on reader page).
+    button.style.pointerEvents = widget.isVisible ? 'auto' : 'none';
   }
 
   void _ensureBlocker() {
