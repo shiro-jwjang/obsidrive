@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:js_interop';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:markdown/markdown.dart' as md;
 import 'package:web/web.dart' as web;
 
 import '../../../core/markdown_parser.dart';
+import '../../vault/data/vault_repository.dart' show BacklinkEntry;
 import '../../vault/domain/vault_models.dart';
 import 'markdown_view_stub.dart';
 
@@ -16,6 +18,8 @@ Widget buildMarkdownView({
   required String markdown,
   required List<Note> notes,
   required WikilinkTapCallback onWikilinkTap,
+  List<BacklinkEntry> backlinks = const [],
+  BacklinkTapCallback? onBacklinkTap,
 }) {
   final hardBreaks = _convertSoftBreaks(markdown);
   final processed = _preprocessWikilinks(hardBreaks);
@@ -25,7 +29,12 @@ Widget buildMarkdownView({
   );
   final resolvedHtml = _resolveWikilinkStyles(html, notes);
 
-  return _HtmlMarkdownView(html: resolvedHtml, onWikilinkTap: onWikilinkTap);
+  return _HtmlMarkdownView(
+    html: resolvedHtml,
+    backlinks: backlinks,
+    onWikilinkTap: onWikilinkTap,
+    onBacklinkTap: onBacklinkTap,
+  );
 }
 
 /// Convert single newlines (soft breaks) to markdown hard breaks (two trailing spaces).
@@ -81,10 +90,17 @@ String _resolveWikilinkStyles(String html, List<Note> notes) {
 const _containerId = '__obsidrive_content__';
 
 class _HtmlMarkdownView extends StatefulWidget {
-  const _HtmlMarkdownView({required this.html, required this.onWikilinkTap});
+  const _HtmlMarkdownView({
+    required this.html,
+    required this.backlinks,
+    required this.onWikilinkTap,
+    this.onBacklinkTap,
+  });
 
   final String html;
+  final List<BacklinkEntry> backlinks;
   final WikilinkTapCallback onWikilinkTap;
+  final BacklinkTapCallback? onBacklinkTap;
 
   @override
   State<_HtmlMarkdownView> createState() => _HtmlMarkdownViewState();
@@ -130,7 +146,9 @@ class _HtmlMarkdownViewState extends State<_HtmlMarkdownView> {
   @override
   void didUpdateWidget(covariant _HtmlMarkdownView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.html != oldWidget.html && _container != null) {
+    if ((widget.html != oldWidget.html ||
+            widget.backlinks != oldWidget.backlinks) &&
+        _container != null) {
       _injectContent(_container!, widget.html);
     }
   }
@@ -153,7 +171,9 @@ class _HtmlMarkdownViewState extends State<_HtmlMarkdownView> {
   }
 
   void _injectContent(web.HTMLDivElement div, String bodyHtml) {
-    final htmlContent = '''
+    final backlinksHtml = _buildBacklinksHtml(widget.backlinks);
+    final htmlContent =
+        '''
 <style>
   body, p, li, td, th { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; line-height: 1.7; color: #1a1a1a; }
   h1 { font-size: 1.8em; margin-top: 0.5em; margin-bottom: 0.4em; font-weight: 700; }
@@ -180,9 +200,40 @@ class _HtmlMarkdownViewState extends State<_HtmlMarkdownView> {
   img { max-width: 100%; height: auto; border-radius: 8px; margin: 0.5em 0; }
   hr { border: none; border-top: 1px solid #e5e7eb; margin: 1.5em 0; }
   input[type="checkbox"] { margin-right: 6px; }
+  .backlinks-section { margin-top: 32px; padding-top: 16px; border-top: 1px solid #333; }
+  .backlinks-section h3 { font-size: 14px; color: #9ca3af; margin-bottom: 8px; }
+  .backlinks-section a { display: block; padding: 4px 0; color: #7c3aed; cursor: pointer; text-decoration: none; }
+  .backlinks-section a:hover { text-decoration: underline; }
 </style>
-$bodyHtml''';
+$bodyHtml
+$backlinksHtml''';
     div.innerHTML = htmlContent.toJS;
+  }
+
+  String _buildBacklinksHtml(List<BacklinkEntry> backlinks) {
+    if (backlinks.isEmpty) {
+      return '';
+    }
+
+    const escape = HtmlEscape(HtmlEscapeMode.element);
+    final items = backlinks
+        .map(
+          (backlink) =>
+              '''
+<a
+  href="#"
+  class="wikilink exists"
+  data-backlink-id="${backlink.sourceNoteId}"
+  title="${escape.convert(backlink.sourceFilePath)}"
+>${escape.convert(backlink.sourceTitle)}</a>''',
+        )
+        .join();
+
+    return '''
+<div class="backlinks-section">
+  <h3>백링크 (${backlinks.length})</h3>
+  $items
+</div>''';
   }
 
   void _attachListeners(web.HTMLDivElement div) {
@@ -195,6 +246,22 @@ $bodyHtml''';
         web.Element? el = target as web.Element;
         while (el != null && el != div) {
           if (el.tagName == 'A') {
+            final backlinkId = el.getAttribute('data-backlink-id');
+            if (backlinkId != null) {
+              event.preventDefault();
+              BacklinkEntry? backlink;
+              for (final entry in widget.backlinks) {
+                if (entry.sourceNoteId.toString() == backlinkId) {
+                  backlink = entry;
+                  break;
+                }
+              }
+              if (backlink != null) {
+                widget.onBacklinkTap?.call(backlink);
+              }
+              return;
+            }
+
             final href = el.getAttribute('href') ?? '';
             if (href.startsWith('wikilink://')) {
               event.preventDefault();

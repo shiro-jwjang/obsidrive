@@ -105,8 +105,8 @@ class _HtmlSearchInputState extends State<_HtmlSearchInput> {
   margin: 0;
   padding: 0;
   background: transparent;
-  color: #111827;
-  font-size: 22px;
+  color: transparent;
+  font-size: 0;
   line-height: 1;
   display: flex;
   align-items: center;
@@ -137,6 +137,9 @@ class _HtmlSearchInputState extends State<_HtmlSearchInput> {
   padding: 8px 16px;
   background: transparent;
   pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
 }
 #$_searchInputId .search-shell {
   display: flex;
@@ -149,12 +152,16 @@ class _HtmlSearchInputState extends State<_HtmlSearchInput> {
   background: #f5f5f5;
   padding: 10px 14px;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
 }
 #$_searchInputId .search-icon {
   color: #667085;
   font-size: 16px;
   line-height: 1;
   user-select: none;
+  -webkit-user-select: none;
 }
 #$_searchInputId input[type="search"] {
   -webkit-appearance: none;
@@ -168,6 +175,16 @@ class _HtmlSearchInputState extends State<_HtmlSearchInput> {
   line-height: 1.4;
   padding: 0;
   margin: 0;
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-tap-highlight-color: transparent;
+  caret-color: #101828;
+}
+#$_searchInputId input[type="search"]::-webkit-search-decoration {
+  display: none;
+}
+#$_searchInputId input[type="search"]::-webkit-search-cancel-button {
+  display: none;
 }
 #$_searchInputId input[type="search"]::placeholder {
   color: #667085;

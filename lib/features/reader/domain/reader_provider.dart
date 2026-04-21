@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../../../core/markdown_parser.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../cache/domain/cache_provider.dart';
+import '../../vault/data/vault_repository.dart';
 import '../../vault/domain/vault_models.dart';
 import '../../vault/domain/vault_provider.dart';
 import '../data/note_content_repository.dart';
@@ -67,6 +68,23 @@ final parsedWikilinksProvider = Provider.family<List<Wikilink>, String>((
   markdown,
 ) {
   return parseWikilinks(markdown);
+});
+
+/// Indexes wikilinks for [note] and returns backlinks (other notes linking to it).
+/// Depends on note content being available.
+final backlinksProvider = FutureProvider.family<List<BacklinkEntry>, Note>((
+  ref,
+  note,
+) async {
+  // Ensure content is loaded first
+  final content = await ref.watch(noteContentProvider(note).future);
+  final vaultRepo = ref.watch(vaultRepositoryProvider);
+
+  // Index wikilinks from this note's content
+  await vaultRepo.indexWikilinks(note.id, content, note.vaultId);
+
+  // Query which notes link TO this note
+  return vaultRepo.getBacklinks(note.id);
 });
 
 class _AuthenticatedHttpClient extends http.BaseClient {

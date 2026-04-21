@@ -178,7 +178,7 @@ void main() {
         ),
       );
 
-      final request = const FolderLoadRequest(
+      const request = FolderLoadRequest(
         vaultId: 1,
         driveFolderId: 'docs-folder',
         folderPath: 'Docs',
@@ -202,7 +202,7 @@ void main() {
         ),
       ];
 
-      final request = const FolderLoadRequest(
+      const request = FolderLoadRequest(
         vaultId: 1,
         driveFolderId: 'docs-folder',
         folderPath: 'Docs',
@@ -641,11 +641,11 @@ Vault vault({
 }
 
 Note note({
-  int id = -1,
-  int vaultId = 1,
   required String title,
   required String path,
   required String driveFileId,
+  int id = -1,
+  int vaultId = 1,
   String? content,
   String? updatedAt,
 }) {

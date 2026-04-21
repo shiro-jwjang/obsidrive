@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 
 import '../../../core/database.dart';
+import '../../../core/markdown_parser.dart';
 import '../domain/vault_models.dart' show DriveFolder;
 
 class VaultRepository {
@@ -368,4 +369,85 @@ class VaultRepository {
     if (id == null) return null;
     return getVault(id);
   }
+
+  // ---------------------------------------------------------------------------
+  // Wikilink indexing & backlinks
+  // ---------------------------------------------------------------------------
+
+  /// Parse wikilinks from [markdown], resolve them against notes in [vaultId],
+  /// and store results in the WikilinkIndex table.
+  Future<void> indexWikilinks(
+    int sourceNoteId,
+    String markdown,
+    int vaultId,
+  ) async {
+    // Remove stale index rows for this source note
+    await (_db.delete(
+      _db.wikilinkIndex,
+    )..where((t) => t.sourceNoteId.equals(sourceNoteId))).go();
+
+    final links = parseWikilinks(markdown);
+    if (links.isEmpty) return;
+
+    final notes = await listNotes(vaultId);
+
+    for (final link in links) {
+      final resolved = resolveInVault(link, notes);
+      await _db
+          .into(_db.wikilinkIndex)
+          .insert(
+            WikilinkIndexCompanion.insert(
+              sourceNoteId: Value(sourceNoteId),
+              targetTitle: Value(link.target),
+              targetNoteId: resolved == null
+                  ? const Value.absent()
+                  : Value(resolved.id),
+              alias: link.alias == null
+                  ? const Value.absent()
+                  : Value(link.alias),
+            ),
+          );
+    }
+  }
+
+  /// Return backlinks: all WikilinkIndex rows that point to [noteId].
+  /// Joins with Notes to include source note title & filePath.
+  Future<List<BacklinkEntry>> getBacklinks(int noteId) async {
+    final rows = await _db
+        .customSelect(
+          '''
+          SELECT wi.source_note_id, n.title AS source_title, n.file_path
+          FROM wikilink_index wi
+          JOIN notes n ON n.id = wi.source_note_id
+          WHERE wi.target_note_id = ?
+          ORDER BY n.title COLLATE NOCASE ASC
+          ''',
+          variables: [Variable<int>(noteId)],
+          readsFrom: {_db.wikilinkIndex, _db.notes},
+        )
+        .get();
+
+    return rows
+        .map(
+          (r) => BacklinkEntry(
+            sourceNoteId: r.read<int>('source_note_id'),
+            sourceTitle: r.read<String>('source_title'),
+            sourceFilePath: r.read<String>('file_path'),
+          ),
+        )
+        .toList();
+  }
+}
+
+/// A single backlink entry: another note that links to the current note.
+class BacklinkEntry {
+  const BacklinkEntry({
+    required this.sourceNoteId,
+    required this.sourceTitle,
+    required this.sourceFilePath,
+  });
+
+  final int sourceNoteId;
+  final String sourceTitle;
+  final String sourceFilePath;
 }

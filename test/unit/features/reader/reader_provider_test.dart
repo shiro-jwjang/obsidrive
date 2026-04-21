@@ -120,9 +120,9 @@ class FakeDriveClient implements DriveFileContentClient {
 
 Note note({
   required int id,
-  int vaultId = 1,
   required String title,
   required String driveFileId,
+  int vaultId = 1,
   String? content,
   String? cachedAt,
 }) {

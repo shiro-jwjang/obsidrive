@@ -1,5 +1,4 @@
 // coverage:ignore-file
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -191,24 +190,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       appBar: AppBar(
         title: Text(widget.vault.name),
         actions: <Widget>[
-          // Web: DOM button handles search open/close (iOS Safari keyboard fix)
-          if (!kIsWeb) ...<Widget>[
-            if (_isSearching)
-              IconButton(
-                tooltip: '검색 닫기',
-                onPressed: _closeSearch,
-                icon: const Icon(Icons.close),
-              )
-            else
-              IconButton(
-                tooltip: '노트 검색',
-                onPressed: _openSearch,
-                icon: const Icon(Icons.search),
-              ),
-          ],
-          if (_isSearching && !kIsWeb)
-            const SizedBox.shrink()
-          else ...<Widget>[
+          if (_isSearching) ...<Widget>[
+            // Close button — always visible (DOM overlay handles tap on web)
+            IconButton(
+              tooltip: '검색 닫기',
+              onPressed: _closeSearch,
+              icon: const Icon(Icons.close),
+            ),
+          ] else ...<Widget>[
             IconButton(
               tooltip: 'Drive에서 새로고침',
               onPressed: isOnline && scanProgress.status != ScanStatus.syncing
@@ -241,6 +230,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               tooltip: '설정',
               onPressed: () => context.go('/settings'),
               icon: const Icon(Icons.settings_outlined),
+            ),
+            // Search icon at far right — DOM overlay handles tap on web
+            IconButton(
+              tooltip: '노트 검색',
+              onPressed: _openSearch,
+              icon: const Icon(Icons.search),
             ),
           ],
         ],

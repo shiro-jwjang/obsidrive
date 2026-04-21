@@ -7,9 +7,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/markdown_parser.dart';
+import '../../vault/data/vault_repository.dart' show BacklinkEntry;
 import '../../vault/domain/vault_models.dart';
 import '../../vault/domain/vault_provider.dart';
-import '../domain/reader_provider.dart';
+import '../domain/reader_provider.dart'
+    show
+        backlinksProvider,
+        currentNoteProvider,
+        noteContentProvider,
+        noteContentRepositoryProvider,
+        noteHistoryProvider,
+        vaultWikilinksProvider;
 import 'markdown_editor.dart';
 import 'markdown_view.dart';
 
@@ -102,6 +110,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
     final content = ref.watch(noteContentProvider(note));
     final vaultNotes = ref.watch(vaultWikilinksProvider(note.vaultId));
+    final backlinks = ref.watch(backlinksProvider(note));
 
     return Scaffold(
       appBar: AppBar(
@@ -184,6 +193,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               data: (markdown) {
                 _scheduleBackgroundRevalidation(note);
                 final notes = vaultNotes.value ?? const <Note>[];
+                final backlinkEntries =
+                    backlinks.value ?? const <BacklinkEntry>[];
                 final rendered = parseFrontmatter(markdown);
                 if (rendered.trim().isEmpty) {
                   return const Center(child: Text('빈 노트'));
@@ -192,8 +203,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 final markdownView = buildMarkdownView(
                   markdown: rendered,
                   notes: notes,
+                  backlinks: backlinkEntries,
                   onWikilinkTap: (target) =>
                       _openWikilink(context, ref, note, target),
+                  onBacklinkTap: (backlink) =>
+                      _openBacklink(context, ref, note, backlink),
                 );
 
                 if (!kIsWeb) {
@@ -288,6 +302,35 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         ref.read(vaultWikilinksProvider(sourceNote.vaultId)).value ??
         const <Note>[];
     final target = resolveInVault(link, notes);
+    if (target == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('노트를 찾을 수 없습니다')));
+      return;
+    }
+
+    ref
+        .read(noteHistoryProvider.notifier)
+        .update((list) => [...list, sourceNote]);
+    ref.read(currentNoteProvider.notifier).state = target;
+  }
+
+  void _openBacklink(
+    BuildContext context,
+    WidgetRef ref,
+    Note sourceNote,
+    BacklinkEntry backlink,
+  ) {
+    final notes =
+        ref.read(vaultWikilinksProvider(sourceNote.vaultId)).value ??
+        const <Note>[];
+    Note? target;
+    for (final note in notes) {
+      if (note.id == backlink.sourceNoteId) {
+        target = note;
+        break;
+      }
+    }
     if (target == null) {
       ScaffoldMessenger.of(
         context,

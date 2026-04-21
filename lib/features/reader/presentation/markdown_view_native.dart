@@ -5,6 +5,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:markdown/markdown.dart' as md;
 
 import '../../../core/markdown_parser.dart';
+import '../../vault/data/vault_repository.dart' show BacklinkEntry;
 import '../../vault/domain/vault_models.dart';
 import 'markdown_view_stub.dart';
 import 'wikilink_span.dart';
@@ -16,19 +17,33 @@ Widget buildMarkdownView({
   required String markdown,
   required List<Note> notes,
   required WikilinkTapCallback onWikilinkTap,
+  List<BacklinkEntry> backlinks = const [],
+  BacklinkTapCallback? onBacklinkTap,
 }) {
   return SingleChildScrollView(
     physics: const BouncingScrollPhysics(),
-    child: MarkdownBody(
-      data: markdown,
-      selectable: true,
-      extensionSet: md.ExtensionSet.gitHubFlavored,
-      inlineSyntaxes: <md.InlineSyntax>[WikilinkInlineSyntax()],
-      builders: <String, MarkdownElementBuilder>{
-        'wikilink': WikilinkElementBuilder(notes: notes, onOpen: onWikilinkTap),
-        'pre': _CodeBlockBuilder(),
-      },
-      paddingBuilders: const <String, MarkdownPaddingBuilder>{},
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        MarkdownBody(
+          data: markdown,
+          selectable: true,
+          extensionSet: md.ExtensionSet.gitHubFlavored,
+          inlineSyntaxes: <md.InlineSyntax>[WikilinkInlineSyntax()],
+          builders: <String, MarkdownElementBuilder>{
+            'wikilink': WikilinkElementBuilder(
+              notes: notes,
+              onOpen: onWikilinkTap,
+            ),
+            'pre': _CodeBlockBuilder(),
+          },
+          paddingBuilders: const <String, MarkdownPaddingBuilder>{},
+        ),
+        if (backlinks.isNotEmpty) ...[
+          const Divider(height: 32, thickness: 1),
+          _BacklinksSection(backlinks: backlinks, onBacklinkTap: onBacklinkTap),
+        ],
+      ],
     ),
   );
 }
@@ -98,6 +113,60 @@ class _CodeBlockBuilder extends MarkdownElementBuilder {
           fontFamily: 'monospace',
           color: theme.colorScheme.onSurfaceVariant,
         ),
+      ),
+    );
+  }
+}
+
+class _BacklinksSection extends StatelessWidget {
+  const _BacklinksSection({required this.backlinks, this.onBacklinkTap});
+
+  final List<BacklinkEntry> backlinks;
+  final BacklinkTapCallback? onBacklinkTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              '백링크 (${backlinks.length})',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          ...backlinks.map(
+            (entry) => ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                Icons.link,
+                size: 18,
+                color: theme.colorScheme.primary,
+              ),
+              title: Text(
+                entry.sourceTitle,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              subtitle: Text(
+                entry.sourceFilePath,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              onTap: onBacklinkTap != null ? () => onBacklinkTap!(entry) : null,
+            ),
+          ),
+        ],
       ),
     );
   }
