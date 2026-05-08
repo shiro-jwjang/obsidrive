@@ -57,10 +57,6 @@ class AuthRepository {
       return null;
     }
 
-    if (user.isExpired(_now())) {
-      return refreshToken();
-    }
-
     return user;
   }
 
@@ -84,7 +80,6 @@ class AuthRepository {
       await _saveUser(user);
       return user;
     } catch (_) {
-      await clearSession();
       throw const AuthException('다시 로그인해 주세요.');
     }
   }

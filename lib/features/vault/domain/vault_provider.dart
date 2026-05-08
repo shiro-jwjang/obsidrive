@@ -3,9 +3,8 @@ import 'dart:async';
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
-// ignore: depend_on_referenced_packages
-import 'package:http/http.dart' as http;
 
+import '../../../core/authenticated_http_client.dart';
 import '../../../core/database.dart';
 import '../../auth/domain/auth_state.dart';
 import '../data/drive_folder_service.dart';
@@ -27,7 +26,14 @@ final driveFolderServiceProvider = Provider<DriveFolderService>((ref) {
     throw StateError('Google Drive requires an authenticated user.');
   }
 
-  final client = _AuthenticatedHttpClient(user.authHeaders);
+  final client = AuthenticatedHttpClient(
+    headers: user.authHeaders,
+    onAuthError: () async {
+      final repo = ref.read(authRepositoryProvider);
+      final refreshedUser = await repo.refreshToken();
+      return refreshedUser.authHeaders;
+    },
+  );
   ref.onDispose(client.close);
   return DriveFolderService(GoogleDriveFilesClient(drive.DriveApi(client)));
 });
@@ -539,24 +545,5 @@ class VaultScanner {
     );
 
     return vault;
-  }
-}
-
-class _AuthenticatedHttpClient extends http.BaseClient {
-  _AuthenticatedHttpClient(this._headers);
-
-  final Map<String, String> _headers;
-  final http.Client _inner = http.Client();
-
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) {
-    request.headers.addAll(_headers);
-    return _inner.send(request);
-  }
-
-  @override
-  void close() {
-    _inner.close();
-    super.close();
   }
 }

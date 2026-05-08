@@ -134,7 +134,7 @@ void main() {
     },
   );
 
-  test('restoreSession refresh failure clears session and throws', () async {
+  test('restoreSession returns expired user without throwing', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'auth.user.id': 'saved-user',
       'auth.user.email': 'saved@example.com',
@@ -144,23 +144,18 @@ void main() {
           .toIso8601String(),
     });
 
-    await expectLater(
-      createRepository().restoreSession(),
-      throwsA(
-        isA<AuthException>().having(
-          (error) => error.message,
-          'message',
-          '다시 로그인해 주세요.',
-        ),
-      ),
-    );
-
+    final user = await createRepository().restoreSession();
+    // Optimistic restoration: expired user is returned without throwing
+    expect(user, isNotNull);
+    expect(user!.id, 'saved-user');
+    expect(user.email, 'saved@example.com');
+    // Session is preserved (not cleared)
     final preferences = await SharedPreferences.getInstance();
-    expect(preferences.getString('auth.user.id'), isNull);
-    expect(preferences.getString('auth.accessToken'), isNull);
+    expect(preferences.getString('auth.user.id'), isNotNull);
+    expect(preferences.getString('auth.accessToken'), isNotNull);
   });
 
-  test('refreshToken clears session when silent sign-in throws', () async {
+  test('refreshToken preserves session when silent sign-in throws', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'auth.user.id': 'saved-user',
       'auth.user.email': 'saved@example.com',
@@ -177,7 +172,8 @@ void main() {
     );
 
     final preferences = await SharedPreferences.getInstance();
-    expect(preferences.getString('auth.user.id'), isNull);
+    // Session is preserved even when silent refresh fails
+    expect(preferences.getString('auth.user.id'), 'saved-user');
   });
 }
 

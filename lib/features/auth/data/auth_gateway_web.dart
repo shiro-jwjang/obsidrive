@@ -45,6 +45,7 @@ class WebAuthGateway implements AuthGateway {
   Future<GatewayUser> _fromAccount(GoogleSignInAccount account) async {
     final auth = await account.authentication;
     final accessToken = auth.accessToken;
+
     if (accessToken == null) {
       throw const AuthException('구글 인증 토큰을 가져오지 못했습니다.');
     }

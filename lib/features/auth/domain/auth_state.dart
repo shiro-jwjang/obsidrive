@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/auth_repository.dart';
@@ -65,8 +67,20 @@ class AuthState {
 }
 
 class AuthController extends Notifier<AuthState> {
+  static const _refreshLeadTime = Duration(minutes: 10);
+  static const _refreshRetryDelay = Duration(minutes: 15);
+
+  Timer? _refreshTimer;
+  var _isDisposed = false;
+
   @override
-  AuthState build() => const AuthState.initial();
+  AuthState build() {
+    ref.onDispose(() {
+      _isDisposed = true;
+      _cancelRefreshTimer();
+    });
+    return const AuthState.initial();
+  }
 
   AuthRepository get _repository => ref.read(authRepositoryProvider);
 
@@ -74,10 +88,16 @@ class AuthController extends Notifier<AuthState> {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final user = await _repository.restoreSession();
-      state = user == null
-          ? const AuthState.unauthenticated()
-          : AuthState.authenticated(user);
+      if (user == null) {
+        _cancelRefreshTimer();
+        state = const AuthState.unauthenticated();
+        return;
+      }
+
+      state = AuthState.authenticated(user);
+      _scheduleRefreshFor(user, restored: true);
     } catch (_) {
+      _cancelRefreshTimer();
       // Stale/expired session — just show login button, no error message
       state = const AuthState.unauthenticated();
     }
@@ -88,6 +108,7 @@ class AuthController extends Notifier<AuthState> {
     try {
       final user = await _repository.signIn();
       state = AuthState.authenticated(user);
+      _scheduleRefreshFor(user);
     } catch (error) {
       state = AuthState.error(_messageFor(error));
     }
@@ -98,11 +119,52 @@ class AuthController extends Notifier<AuthState> {
   Future<void> signOut() async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
+      _cancelRefreshTimer();
       await _repository.signOut();
       state = const AuthState.unauthenticated();
     } catch (error) {
       state = AuthState.error(_messageFor(error));
     }
+  }
+
+  void _scheduleRefreshFor(AuthUser user, {bool restored = false}) {
+    final now = DateTime.now();
+    final delay = user.isExpired(now)
+        ? _refreshRetryDelay
+        : user.expiresAt.subtract(_refreshLeadTime).difference(now);
+    _scheduleRefresh(delay.isNegative ? Duration.zero : delay);
+  }
+
+  void _scheduleRefresh(Duration delay) {
+    _cancelRefreshTimer();
+    _refreshTimer = Timer(delay, _handleScheduledRefresh);
+  }
+
+  Future<void> _handleScheduledRefresh() async {
+    if (_isDisposed || state.status != AuthStatus.authenticated) {
+      return;
+    }
+
+    try {
+      final user = await _repository.refreshToken();
+      if (_isDisposed) {
+        return;
+      }
+
+      state = AuthState.authenticated(user);
+      _scheduleRefreshFor(user);
+    } catch (_) {
+      if (_isDisposed || state.status != AuthStatus.authenticated) {
+        return;
+      }
+
+      _scheduleRefresh(_refreshRetryDelay);
+    }
+  }
+
+  void _cancelRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
   }
 
   String _messageFor(Object error) {
