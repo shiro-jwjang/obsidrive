@@ -30,8 +30,13 @@ final driveFolderServiceProvider = Provider<DriveFolderService>((ref) {
     headers: user.authHeaders,
     onAuthError: () async {
       final repo = ref.read(authRepositoryProvider);
-      final refreshedUser = await repo.refreshToken();
-      return refreshedUser.authHeaders;
+      try {
+        final refreshedUser = await repo.refreshToken();
+        return refreshedUser.authHeaders;
+      } catch (_) {
+        ref.read(authControllerProvider.notifier).forceSignOut();
+        return null;
+      }
     },
   );
   ref.onDispose(client.close);

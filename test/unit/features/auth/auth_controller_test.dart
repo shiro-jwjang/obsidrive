@@ -92,10 +92,10 @@ void main() {
   });
 
   test(
-    'restoreSession keeps expired user when silent refresh fails (PWA scenario)',
+    'restoreSession goes to login when expired token and silent refresh fails (PWA scenario)',
     () async {
-      // Saved session with expired token — restoreSession returns the expired user
-      // when refreshToken throws (matching the real AuthRepository behavior)
+      // Saved session with expired token — restoreSession returns the expired user,
+      // then controller tries silent refresh which fails → unauthenticated.
       repository.savedUser = AuthUser(
         id: 'user-1',
         email: 'test@example.com',
@@ -107,20 +107,17 @@ void main() {
       final controller = container.read(authControllerProvider.notifier);
       await controller.restoreSession();
 
-      // Should still be authenticated with expired token (PWA-friendly behavior)
+      // Should be unauthenticated (redirect to login screen)
       expect(
         container.read(authControllerProvider).status,
-        AuthStatus.authenticated,
+        AuthStatus.unauthenticated,
       );
-      expect(
-        container.read(authControllerProvider).user?.accessToken,
-        'expired-token',
-      );
+      expect(container.read(authControllerProvider).user, isNull);
     },
   );
 
   test(
-    'signIn after failed restore replaces expired token with fresh one',
+    'restoreSession refreshes expired token when silent refresh succeeds',
     () async {
       repository.savedUser = AuthUser(
         id: 'user-1',
@@ -128,36 +125,65 @@ void main() {
         accessToken: 'expired-token',
         expiresAt: DateTime.utc(2026, 4, 27, 0),
       );
-      repository.refreshFails = true;
       repository.signInUser = AuthUser(
         id: 'user-1',
         email: 'test@example.com',
         accessToken: 'fresh-token',
-        expiresAt: DateTime.utc(2026, 4, 27, 12),
+        expiresAt: DateTime.now().add(const Duration(hours: 1)),
       );
 
       final controller = container.read(authControllerProvider.notifier);
-
-      // First: restoreSession keeps expired token
       await controller.restoreSession();
-      expect(
-        container.read(authControllerProvider).user?.accessToken,
-        'expired-token',
-      );
 
-      // Then: manual signIn replaces with fresh token
-      await controller.signIn();
-      expect(
-        container.read(authControllerProvider).user?.accessToken,
-        'fresh-token',
-      );
+      // Should be authenticated with fresh token
       expect(
         container.read(authControllerProvider).status,
         AuthStatus.authenticated,
       );
-      expect(repository.signInCount, 1);
+      expect(
+        container.read(authControllerProvider).user?.accessToken,
+        'fresh-token',
+      );
+      expect(repository.refreshCount, 1);
     },
   );
+
+  test('signIn after failed restore starts fresh login flow', () async {
+    repository.savedUser = AuthUser(
+      id: 'user-1',
+      email: 'test@example.com',
+      accessToken: 'expired-token',
+      expiresAt: DateTime.utc(2026, 4, 27, 0),
+    );
+    repository.refreshFails = true;
+    repository.signInUser = AuthUser(
+      id: 'user-1',
+      email: 'test@example.com',
+      accessToken: 'fresh-token',
+      expiresAt: DateTime.utc(2026, 4, 27, 12),
+    );
+
+    final controller = container.read(authControllerProvider.notifier);
+
+    // First: restoreSession fails → unauthenticated
+    await controller.restoreSession();
+    expect(
+      container.read(authControllerProvider).status,
+      AuthStatus.unauthenticated,
+    );
+
+    // Then: manual signIn works
+    await controller.signIn();
+    expect(
+      container.read(authControllerProvider).user?.accessToken,
+      'fresh-token',
+    );
+    expect(
+      container.read(authControllerProvider).status,
+      AuthStatus.authenticated,
+    );
+    expect(repository.signInCount, 1);
+  });
 
   test('signOut sets state to unauthenticated', () async {
     repository.signInUser = AuthUser(

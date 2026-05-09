@@ -35,18 +35,23 @@ class AuthenticatedHttpClient extends http.BaseClient {
 
       // Try token refresh via callback
       if (_onAuthError != null) {
-        final newHeaders = await _onAuthError!();
-        if (newHeaders != null) {
-          _headers.clear();
-          _headers.addAll(newHeaders);
+        try {
+          final newHeaders = await _onAuthError!();
+          if (newHeaders != null) {
+            _headers.clear();
+            _headers.addAll(newHeaders);
 
-          // Clone the request for retry
-          final retryRequest = _cloneRequest(request);
-          retryRequest.headers.addAll(_headers);
+            // Clone the request for retry
+            final retryRequest = _cloneRequest(request);
+            retryRequest.headers.addAll(_headers);
 
-          final retryResponse = await _inner.send(retryRequest);
+            final retryResponse = await _inner.send(retryRequest);
 
-          return retryResponse;
+            return retryResponse;
+          }
+        } catch (_) {
+          // Refresh failed (e.g. GIS session lost in PWA).
+          // Fall through to return the original 401 response.
         }
       }
 

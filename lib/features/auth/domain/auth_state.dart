@@ -94,8 +94,22 @@ class AuthController extends Notifier<AuthState> {
         return;
       }
 
-      state = AuthState.authenticated(user);
-      _scheduleRefreshFor(user, restored: true);
+      // If token is already expired, try silent refresh immediately
+      // instead of setting authenticated with a dead token.
+      if (user.isExpired(DateTime.now())) {
+        try {
+          final refreshedUser = await _repository.refreshToken();
+          state = AuthState.authenticated(refreshedUser);
+          _scheduleRefreshFor(refreshedUser);
+        } catch (_) {
+          // Silent refresh failed (common in PWA where GIS session is lost)
+          _cancelRefreshTimer();
+          state = const AuthState.unauthenticated();
+        }
+      } else {
+        state = AuthState.authenticated(user);
+        _scheduleRefreshFor(user, restored: true);
+      }
     } catch (_) {
       _cancelRefreshTimer();
       // Stale/expired session — just show login button, no error message
@@ -125,6 +139,14 @@ class AuthController extends Notifier<AuthState> {
     } catch (error) {
       state = AuthState.error(_messageFor(error));
     }
+  }
+
+  /// Clears auth state without calling gateway signOut.
+  /// Use when the gateway session is already lost (e.g. PWA GIS expiry).
+  Future<void> forceSignOut() async {
+    _cancelRefreshTimer();
+    await _repository.clearSession();
+    state = const AuthState.unauthenticated();
   }
 
   void _scheduleRefreshFor(AuthUser user, {bool restored = false}) {

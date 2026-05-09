@@ -30,8 +30,14 @@ final driveFileContentClientProvider = Provider<DriveFileContentClient>((ref) {
     headers: user.authHeaders,
     onAuthError: () async {
       final repo = ref.read(authRepositoryProvider);
-      final refreshedUser = await repo.refreshToken();
-      return refreshedUser.authHeaders;
+      try {
+        final refreshedUser = await repo.refreshToken();
+        return refreshedUser.authHeaders;
+      } catch (_) {
+        // Refresh failed — trigger redirect to login
+        ref.read(authControllerProvider.notifier).forceSignOut();
+        return null;
+      }
     },
   );
   ref.onDispose(client.close);
