@@ -222,8 +222,17 @@ class _HtmlMarkdownViewState extends State<_HtmlMarkdownView> {
 </style>
 <div
   data-obsidrive-ptr-indicator
-  style="height:0;overflow:hidden;display:flex;align-items:flex-end;justify-content:center;color:#6b7280;font-size:14px;font-weight:500;transition:height 0.18s ease, opacity 0.18s ease;padding:0 0 0 0;opacity:0;"
-></div>
+  style="height:0;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#6b7280;font-size:14px;font-weight:500;transition:height 0.2s ease, opacity 0.2s ease;padding:0;opacity:0;"
+>
+  <svg class="ptr-spinner" viewBox="0 0 24 24" style="width:20px;height:20px;animation:none;">
+    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2.5" fill="none" stroke-dasharray="50 14" stroke-linecap="round"/>
+  </svg>
+  <span class="ptr-label"></span>
+</div>
+<style>
+  .ptr-spinning svg.ptr-spinner { animation: ptr-spin 0.8s linear infinite; }
+  @keyframes ptr-spin { to { transform: rotate(360deg); } }
+</style>
 $bodyHtml
 $backlinksHtml''';
     div.innerHTML = htmlContent.toJS;
@@ -331,14 +340,21 @@ $backlinksHtml''';
   let isRefreshing = false;
 
   const getIndicator = () => div.querySelector('[data-obsidrive-ptr-indicator]');
-  const setIndicator = (text, pull) => {
+  const getSpinner = () => div.querySelector('.ptr-spinner');
+  const getLabel = () => div.querySelector('.ptr-label');
+  const setIndicator = (text, pull, spinning) => {
     const indicator = getIndicator();
     if (!indicator) return;
     const height = Math.max(0, Math.min(pull, 72));
-    indicator.textContent = text;
-    indicator.style.height = `\${height}px`;
+    const label = getLabel();
+    if (label) label.textContent = text;
+    indicator.style.height = height + 'px';
     indicator.style.opacity = height > 0 ? '1' : '0';
-    indicator.style.paddingBottom = height > 0 ? '10px' : '0';
+    if (spinning) {
+      indicator.classList.add('ptr-spinning');
+    } else {
+      indicator.classList.remove('ptr-spinning');
+    }
   };
   const reset = () => {
     peakPull = 0;
@@ -352,7 +368,7 @@ $backlinksHtml''';
     peakPull = 0;
     isPulling = div.scrollTop === 0;
     if (isPulling) {
-      setIndicator('↓ 더 아래로...', 0);
+      setIndicator('', 0, false);
     }
   }, { passive: true });
 
@@ -362,15 +378,16 @@ $backlinksHtml''';
     const rawPull = currentY - startY;
     if (rawPull <= 0) {
       peakPull = 0;
-      setIndicator('↓ 더 아래로...', 0);
+      setIndicator('', 0, false);
       return;
     }
 
     const pull = Math.min(rawPull * 0.6, 96);
     peakPull = Math.max(peakPull, pull);
     setIndicator(
-      pull >= 60 ? '↻ 놓으면 새로고침' : '↓ 더 아래로...',
+      pull >= 60 ? '놓으면 새로고침' : '',
       pull,
+      false,
     );
   }, { passive: true });
 
@@ -379,18 +396,18 @@ $backlinksHtml''';
 
     if (peakPull >= 60 && typeof window.__obsidriveNoteRefresh === 'function') {
       isRefreshing = true;
-      setIndicator('↻ 새로고침 중...', 60);
+      setIndicator('새로고침 중...', 56, true);
       try {
         await Promise.race([
           window.__obsidriveNoteRefresh(),
           new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000)),
         ]);
-        setIndicator('✓ 완료', 40);
+        setIndicator('완료', 40, false);
         setTimeout(reset, 600);
         return;
       } catch (e) {
         console.error('[Obsidrive] refresh failed:', e);
-        setIndicator('✗ 실패', 40);
+        setIndicator('실패', 40, false);
         setTimeout(reset, 1000);
         return;
       } finally {

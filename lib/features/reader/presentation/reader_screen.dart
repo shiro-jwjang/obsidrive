@@ -166,6 +166,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
               onPressed: () => _toggleFavorite(note),
             ),
             IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Drive에서 새로고침',
+              onPressed: () async {
+                ref.invalidate(forceRefreshNoteProvider(note));
+                await ref.read(forceRefreshNoteProvider(note).future);
+              },
+            ),
+            IconButton(
               icon: const Icon(Icons.edit_outlined),
               tooltip: '편집',
               onPressed: content.hasValue && content.value != null
