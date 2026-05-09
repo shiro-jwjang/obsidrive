@@ -14,6 +14,7 @@ import '../domain/reader_provider.dart'
     show
         backlinksProvider,
         currentNoteProvider,
+        forceRefreshNoteProvider,
         noteContentProvider,
         noteContentRepositoryProvider,
         noteHistoryProvider,
@@ -208,6 +209,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                       _openWikilink(context, ref, note, target),
                   onBacklinkTap: (backlink) =>
                       _openBacklink(context, ref, note, backlink),
+                  onRefresh: () async {
+                    await ref.read(forceRefreshNoteProvider(note).future);
+                  },
                 );
 
                 if (!kIsWeb) {

@@ -149,6 +149,21 @@ class NoteContentRepository {
     return content;
   }
 
+  Future<void> forceRefresh(Note note) async {
+    if (!_isOnline()) {
+      throw const OfflineNoteUnavailableException();
+    }
+
+    final cached = await _latestNote(note);
+    final content = await _driveClient.downloadMarkdown(cached.driveFileId);
+    await _store.upsertNote(
+      cached.copyWith(
+        content: Value(content),
+        cachedAt: Value(_now().toIso8601String()),
+      ),
+    );
+  }
+
   Future<void> saveContent(Note note, String content) async {
     await _driveClient.uploadMarkdown(note.driveFileId, content);
     await _store.upsertNote(

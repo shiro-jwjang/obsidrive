@@ -15,4 +15,5 @@ Widget buildMarkdownView({
   required WikilinkTapCallback onWikilinkTap,
   List<BacklinkEntry> backlinks = const [],
   BacklinkTapCallback? onBacklinkTap,
+  Future<void> Function()? onRefresh,
 }) => throw UnsupportedError('Platform not supported');

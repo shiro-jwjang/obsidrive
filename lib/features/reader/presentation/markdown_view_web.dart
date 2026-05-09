@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 
 import 'package:flutter/material.dart';
 // ignore: depend_on_referenced_packages
@@ -20,6 +21,7 @@ Widget buildMarkdownView({
   required WikilinkTapCallback onWikilinkTap,
   List<BacklinkEntry> backlinks = const [],
   BacklinkTapCallback? onBacklinkTap,
+  Future<void> Function()? onRefresh,
 }) {
   final hardBreaks = _convertSoftBreaks(markdown);
   final processed = _preprocessWikilinks(hardBreaks);
@@ -34,6 +36,7 @@ Widget buildMarkdownView({
     backlinks: backlinks,
     onWikilinkTap: onWikilinkTap,
     onBacklinkTap: onBacklinkTap,
+    onRefresh: onRefresh,
   );
 }
 
@@ -95,12 +98,14 @@ class _HtmlMarkdownView extends StatefulWidget {
     required this.backlinks,
     required this.onWikilinkTap,
     this.onBacklinkTap,
+    this.onRefresh,
   });
 
   final String html;
   final List<BacklinkEntry> backlinks;
   final WikilinkTapCallback onWikilinkTap;
   final BacklinkTapCallback? onBacklinkTap;
+  final Future<void> Function()? onRefresh;
 
   @override
   State<_HtmlMarkdownView> createState() => _HtmlMarkdownViewState();
@@ -132,12 +137,15 @@ class _HtmlMarkdownViewState extends State<_HtmlMarkdownView> {
       web.document.body!.appendChild(container);
     }
     _container = container as web.HTMLDivElement;
+    _registerRefreshBridge();
     _injectContent(_container!, widget.html);
+    _attachPullToRefresh(_container!);
   }
 
   @override
   void dispose() {
     // Remove container when leaving reader screen entirely
+    globalContext.setProperty('__obsidriveNoteRefresh'.toJS, null);
     _container?.remove();
     _container = null;
     super.dispose();
@@ -146,10 +154,16 @@ class _HtmlMarkdownViewState extends State<_HtmlMarkdownView> {
   @override
   void didUpdateWidget(covariant _HtmlMarkdownView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.onRefresh != oldWidget.onRefresh) {
+      _registerRefreshBridge();
+    }
     if ((widget.html != oldWidget.html ||
             widget.backlinks != oldWidget.backlinks) &&
         _container != null) {
       _injectContent(_container!, widget.html);
+      _attachPullToRefresh(_container!);
+    } else if (_container != null) {
+      _attachPullToRefresh(_container!);
     }
   }
 
@@ -165,6 +179,7 @@ class _HtmlMarkdownViewState extends State<_HtmlMarkdownView> {
     s.padding = '16px';
     s.boxSizing = 'border-box';
     s.zIndex = '100';
+    s.overscrollBehavior = 'contain';
     s.setProperty('-webkit-user-select', 'text');
     s.setProperty('user-select', 'text');
     s.backgroundColor = '#ffffff';
@@ -205,6 +220,10 @@ class _HtmlMarkdownViewState extends State<_HtmlMarkdownView> {
   .backlinks-section a { display: block; padding: 4px 0; color: #7c3aed; cursor: pointer; text-decoration: none; }
   .backlinks-section a:hover { text-decoration: underline; }
 </style>
+<div
+  data-obsidrive-ptr-indicator
+  style="height:0;overflow:hidden;display:flex;align-items:flex-end;justify-content:center;color:#6b7280;font-size:14px;font-weight:500;transition:height 0.18s ease, opacity 0.18s ease;padding:0 0 0 0;opacity:0;"
+></div>
 $bodyHtml
 $backlinksHtml''';
     div.innerHTML = htmlContent.toJS;
@@ -276,5 +295,111 @@ $backlinksHtml''';
         }
       }).toJS,
     );
+  }
+
+  void _registerRefreshBridge() {
+    JSPromise<JSAny?> refresh() {
+      final handler = widget.onRefresh;
+      if (handler == null) {
+        return Future<void>.value().toJS;
+      }
+      return handler().toJS;
+    }
+
+    globalContext.setProperty('__obsidriveNoteRefresh'.toJS, refresh.toJS);
+  }
+
+  void _attachPullToRefresh(web.HTMLDivElement div) {
+    final script =
+        web.document.createElement('script') as web.HTMLScriptElement;
+    script.text =
+        '''
+(() => {
+  const div = document.getElementById(${jsonEncode(_containerId)});
+  if (!div) return;
+
+  div.style.overscrollBehavior = 'contain';
+
+  if (div.__obsidrivePtrAttached) {
+    return;
+  }
+  div.__obsidrivePtrAttached = true;
+
+  let startY = 0;
+  let peakPull = 0;
+  let isPulling = false;
+  let isRefreshing = false;
+
+  const getIndicator = () => div.querySelector('[data-obsidrive-ptr-indicator]');
+  const setIndicator = (text, pull) => {
+    const indicator = getIndicator();
+    if (!indicator) return;
+    const height = Math.max(0, Math.min(pull, 72));
+    indicator.textContent = text;
+    indicator.style.height = `\${height}px`;
+    indicator.style.opacity = height > 0 ? '1' : '0';
+    indicator.style.paddingBottom = height > 0 ? '10px' : '0';
+  };
+  const reset = () => {
+    peakPull = 0;
+    isPulling = false;
+    setIndicator('', 0);
+  };
+
+  div.addEventListener('touchstart', (event) => {
+    if (isRefreshing) return;
+    startY = event.touches && event.touches.length ? event.touches[0].clientY : 0;
+    peakPull = 0;
+    isPulling = div.scrollTop === 0;
+    if (isPulling) {
+      setIndicator('↓ 더 아래로...', 0);
+    }
+  }, { passive: true });
+
+  div.addEventListener('touchmove', (event) => {
+    if (isRefreshing || !isPulling || div.scrollTop !== 0) return;
+    const currentY = event.touches && event.touches.length ? event.touches[0].clientY : startY;
+    const rawPull = currentY - startY;
+    if (rawPull <= 0) {
+      peakPull = 0;
+      setIndicator('↓ 더 아래로...', 0);
+      return;
+    }
+
+    const pull = Math.min(rawPull * 0.6, 96);
+    peakPull = Math.max(peakPull, pull);
+    setIndicator(
+      pull >= 60 ? '↻ 놓으면 새로고침' : '↓ 더 아래로...',
+      pull,
+    );
+  }, { passive: true });
+
+  div.addEventListener('touchend', async () => {
+    if (isRefreshing) return;
+
+    if (peakPull >= 60 && typeof window.__obsidriveNoteRefresh === 'function') {
+      isRefreshing = true;
+      setIndicator('↻ 새로고침 중...', 60);
+      try {
+        await window.__obsidriveNoteRefresh();
+      } finally {
+        isRefreshing = false;
+        reset();
+      }
+      return;
+    }
+
+    reset();
+  }, { passive: true });
+
+  div.addEventListener('touchcancel', () => {
+    if (!isRefreshing) {
+      reset();
+    }
+  }, { passive: true });
+})();
+''';
+    div.appendChild(script);
+    script.remove();
   }
 }

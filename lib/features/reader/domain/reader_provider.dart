@@ -55,6 +55,15 @@ final noteContentProvider = FutureProvider.family<String, Note>((ref, note) {
   return ref.watch(noteContentRepositoryProvider).getContent(note);
 });
 
+final forceRefreshNoteProvider = FutureProvider.family<void, Note>((
+  ref,
+  note,
+) async {
+  final repo = ref.read(noteContentRepositoryProvider);
+  await repo.forceRefresh(note);
+  ref.invalidate(noteContentProvider(note));
+});
+
 final backgroundRevalidateProvider = FutureProvider.family<String?, Note>((
   ref,
   note,
