@@ -366,20 +366,22 @@ $backlinksHtml''';
     if (isRefreshing) return;
     startY = event.touches && event.touches.length ? event.touches[0].clientY : 0;
     peakPull = 0;
-    isPulling = div.scrollTop === 0;
-    if (isPulling) {
-      setIndicator('', 0, false);
-    }
+    isPulling = div.scrollTop <= 0;
   }, { passive: true });
 
   div.addEventListener('touchmove', (event) => {
-    if (isRefreshing || !isPulling || div.scrollTop !== 0) return;
+    if (isRefreshing || !isPulling) return;
     const currentY = event.touches && event.touches.length ? event.touches[0].clientY : startY;
     const rawPull = currentY - startY;
     if (rawPull <= 0) {
       peakPull = 0;
       setIndicator('', 0, false);
       return;
+    }
+
+    // Prevent browser scroll when pulling down
+    if (div.scrollTop <= 0 && rawPull > 0) {
+      event.preventDefault();
     }
 
     const pull = Math.min(rawPull * 0.6, 96);
@@ -389,7 +391,7 @@ $backlinksHtml''';
       pull,
       false,
     );
-  }, { passive: true });
+  }, { passive: false });
 
   div.addEventListener('touchend', async () => {
     if (isRefreshing) return;
