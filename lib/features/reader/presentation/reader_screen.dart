@@ -210,6 +210,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                   onBacklinkTap: (backlink) =>
                       _openBacklink(context, ref, note, backlink),
                   onRefresh: () async {
+                    ref.invalidate(forceRefreshNoteProvider(note));
                     await ref.read(forceRefreshNoteProvider(note).future);
                   },
                 );

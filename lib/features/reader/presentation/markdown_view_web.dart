@@ -381,12 +381,21 @@ $backlinksHtml''';
       isRefreshing = true;
       setIndicator('↻ 새로고침 중...', 60);
       try {
-        await window.__obsidriveNoteRefresh();
+        await Promise.race([
+          window.__obsidriveNoteRefresh(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000)),
+        ]);
+        setIndicator('✓ 완료', 40);
+        setTimeout(reset, 600);
+        return;
+      } catch (e) {
+        console.error('[Obsidrive] refresh failed:', e);
+        setIndicator('✗ 실패', 40);
+        setTimeout(reset, 1000);
+        return;
       } finally {
         isRefreshing = false;
-        reset();
       }
-      return;
     }
 
     reset();
